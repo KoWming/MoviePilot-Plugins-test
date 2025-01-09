@@ -147,9 +147,27 @@ class LuckyHelper(_PluginBase):
                                         }
                                     }
                                 ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSwitch',
+                                        'props': {
+                                            'model': 'backupsnotify',
+                                            'label': '备份通知',
+                                            'hint': '备份成功发送通知'
+                                        }
+                                    }
+                                ]
                             }
                         ]
-                    }, {
+                    },
+                    {
                         'component': 'VRow',
                         'content': [
                             {
@@ -185,66 +203,33 @@ class LuckyHelper(_PluginBase):
                                         }
                                     }
                                 ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'backupcron',
+                                            'label': '自动备份',
+                                            'placeholder': '0 7 * * *'
+                                        }
+                                    }
+                                ]
                             }
                         ]
-                    },
-                    {
-                        'component': 'VWindow',
-                        'props': {
-                            'model': '_tabs'
-                        },
-                        'content': [{
-                            'component': 'VWindowItem',
-                            'props': {
-                                'value': 'C3',
-                                'style': {'margin-top': '30px'}
-                            },
-                            'content': [{
-                                "component": "VRow",
-                                "content": [
-                                    {
-                                        'component': 'VCol',
-                                        'props': {
-                                            'cols': 12,
-                                            'md': 6
-                                        },
-                                        'content': [
-                                            {
-                                                'component': 'VTextField',
-                                                'props': {
-                                                    'model': 'backupcron',
-                                                    'label': '自动备份',
-                                                    'placeholder': '0 7 * * *'
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        'component': 'VCol',
-                                        'props': {
-                                            'cols': 12,
-                                            'md': 6
-                                        },
-                                        'content': [
-                                            {
-                                                'component': 'VSwitch',
-                                                'props': {
-                                                    'model': 'backupsnotify',
-                                                    'label': '备份通知',
-                                                    'hint': '备份成功发送通知'
-                                                }
-                                            }
-                                        ]
-                                    }
-                                ]}]
-                        }]
-                    }],
+                    }
+                ]
             }
         ], {
             "enabled": False,
             "onlyonce": False,
             "backupsnotify": False,
-        }
+            }
 
     def stop_service(self):
         """
