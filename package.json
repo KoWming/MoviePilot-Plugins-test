@@ -1,22 +1,9 @@
 {
-    "ZspaceMediaFresh": {
-        "name": "刷新极影视",
-        "description": "定时刷新极影视",
-        "labels": "极空间",
-        "version": "1.5.2",
-        "icon": "https://raw.githubusercontent.com/gxterry/MoviePilot-Plugins/main/icons/Zspace_B.png",
-        "author": "gxterry",
-        "level": 1,
-        "history": {
-            "v1.5.2": "移除非必要属性",
-            "v1.5.1": "修复入库失败数据过滤异常"
-        }
-    },
-    "DockerCopilotHelper": {
-        "name": "DC助手",
-        "description": "配合DockerCopilot,完成更新通知、自动更新、自动备份功能",
+    "LuckyHelper": {
+        "name": "Lucky助手",
+        "description": "配合Lucky,完成自动备份功能",
         "labels": "Docker",
-        "version": "1.1.2",
+        "version": "1.0",
         "icon": "https://raw.githubusercontent.com/gxterry/MoviePilot-Plugins/main/icons/Docker_Copilot.png",
         "author": "gxterry",
         "level": 1,
@@ -24,16 +11,6 @@
             "v1.1.2": "修复网络异常导致的数据无法加载问题",
             "v1.1.1": "修复面板加载异常"
         },
-        "v2": true
-    },
-    "ZspaceSysMsg": {
-        "name": "极空间系统通知",
-        "description": "将极空间系统消息推送到MP的消息渠道",
-        "labels": "极空间",
-        "version": "1.0",
-        "icon": "Zspace_A.png",
-        "author": "gxterry",
-        "level": 1,
         "v2": true
     }
 }
