@@ -93,13 +93,13 @@ class LuckyHelper(_PluginBase):
                 self._scheduler.print_jobs()
                 self._scheduler.start()
 
-    def api_backup(self, apikey: str):
-        """
-        API调用备份
-        """
-        if apikey != settings.API_TOKEN:
-            return schemas.Response(success=False, message="API密钥错误")
-        return self.__backup()
+#    def api_backup(self, apikey: str):
+#        """
+#        API调用备份
+#        """
+#        if apikey != settings.API_TOKEN:
+#            return schemas.Response(success=False, message="API密钥错误")
+#        return self.__backup()
 
     def get_jwt(self) -> str:
         # 减少接口请求直接使用jwt
@@ -120,6 +120,15 @@ class LuckyHelper(_PluginBase):
         # 备份保存路径
         bk_path = Path(self._back_path) if self._back_path else self.get_data_path()
 
+        # 检查路径是否存在，如果不存在则创建
+        if not bk_path.exists():
+            try:
+                bk_path.mkdir(parents=True, exist_ok=True)
+                logger.info(f"创建备份路径: {bk_path}")
+            except Exception as e:
+                logger.error(f"创建备份路径失败: {str(e)}")
+                return False, f"创建备份路径失败: {str(e)}"
+
         # 构造请求URL
         backup_url = f"{self._host}/api/configure?openToken={self._openToken}"
 
@@ -135,8 +144,8 @@ class LuckyHelper(_PluginBase):
                 
                 # 定义保存文件的路径，使用原始文件名
                 zip_file_name = result.headers.get('Content-Disposition', '').split('filename=')[-1].strip('"')
-                if not zip_file_name:
-                    zip_file_name = f"bk_{time.strftime('%Y%m%d%H%M%S')}.zip"
+             #   if not zip_file_name:
+             #       zip_file_name = f"bk_{time.strftime('%Y%m%d%H%M%S')}.zip"
                 zip_file_path = bk_path / zip_file_name
                 
                 # 保存文件到本地
@@ -159,8 +168,8 @@ class LuckyHelper(_PluginBase):
         bk_cnt = 0
         del_cnt = 0
         if self._cnt:
-            # 获取指定路径下所有以"bk"开头的文件，按照创建时间从旧到新排序
-            files = sorted(glob.glob(f"{bk_path}/bk**.zip"), key=os.path.getctime)
+            # 获取指定路径下所有以"lucky"开头的文件，按照创建时间从旧到新排序
+            files = sorted(glob.glob(f"{bk_path}/lucky*.zip"), key=os.path.getctime)
             bk_cnt = len(files)
             # 计算需要删除的文件数
             del_cnt = bk_cnt - int(self._cnt)
@@ -187,19 +196,19 @@ class LuckyHelper(_PluginBase):
 
         return success, msg
 
-    @staticmethod
-    def backup_file(bk_path: Path = None):
-        """
-        @param bk_path     自定义备份路径
-        """
-        try:
-            # 创建备份文件夹
-            config_path = Path(settings.CONFIG_PATH)
-            backup_file = f"bk_{time.strftime('%Y%m%d%H%M%S')}"
-            backup_path = bk_path / backup_file
-            backup_path.mkdir(parents=True)
-        except IOError:
-            return None
+#    @staticmethod
+#    def backup_file(bk_path: Path = None):
+#        """
+#        @param bk_path     自定义备份路径
+#        """
+#        try:
+#            # 创建备份文件夹
+#            config_path = Path(settings.CONFIG_PATH)
+#            backup_file = f"bk_{time.strftime('%Y%m%d%H%M%S')}"
+#            backup_path = bk_path / backup_file
+#            backup_path.mkdir(parents=True)
+#        except IOError:
+#            return None
 
     def get_state(self) -> bool:
         return self._enabled
@@ -209,13 +218,14 @@ class LuckyHelper(_PluginBase):
         pass
 
     def get_api(self) -> List[Dict[str, Any]]:
-        return [{
-            "path": "/backup",
-            "endpoint": self.api_backup,
-            "methods": ["GET"],
-            "summary": "MoviePilot备份",
-            "description": "MoviePilot备份",
-        }]
+        pass
+#        return [{
+#            "path": "/backup",
+#            "endpoint": self.api_backup,
+#            "methods": ["GET"],
+#            "summary": "MoviePilot备份",
+#            "description": "MoviePilot备份",
+#        }]
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
@@ -230,22 +240,22 @@ class LuckyHelper(_PluginBase):
         """
         if self._enabled and self._cron:
             return [{
-                "id": "AutoBackup",
-                "name": "自动备份定时服务",
+                "id": "LuckyHelper",
+                "name": "Lucky助手备份定时服务",
                 "trigger": CronTrigger.from_crontab(self._cron),
                 "func": self.__backup,
                 "kwargs": {}
             }]
 
-    def backup(self) -> schemas.Response:
-        """
-        API调用备份
-        """
-        success, msg = self.__backup()
-        return schemas.Response(
-            success=success,
-            message=msg
-        )
+#    def backup(self) -> schemas.Response:
+#        """
+#        API调用备份
+#        """
+#        success, msg = self.__backup()
+#        return schemas.Response(
+#            success=success,
+#            message=msg
+#        )
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         """
@@ -434,8 +444,12 @@ class LuckyHelper(_PluginBase):
             }
         ], {
             "enabled": False,
-            "request_method": "POST",
-            "webhook_url": "",
+            "notify": False,
+            "onlyonce": False,
+            "cron": "0 7 * * *",
+            "cnt": 5,
+            "host": "",
+            "openToken": "",
             "back_path": str(self.get_data_path())
         }
 
