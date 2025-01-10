@@ -67,6 +67,9 @@ class LuckyHelper(_PluginBase):
                     # 推送实时消息
                     self.systemmessage.put(f"执行周期配置错误：{err}")
 
+    def get_state(self) -> bool:
+        return self._enabled
+
     def backup(self):
         """
         备份
@@ -94,6 +97,17 @@ class LuckyHelper(_PluginBase):
         except Exception as e:
             logger.error(f"DC-备份失败,网络异常,请检查DockerCopilot服务是否正常: {str(e)}")
             return []
+
+    @eventmanager.register(EventType.PluginAction)
+    def remote_sync(self, event: Event):
+        pass
+
+    @staticmethod
+    def get_command() -> List[Dict[str, Any]]:
+        pass
+
+    def get_api(self) -> List[Dict[str, Any]]:
+        pass 
 
     def get_jwt(self) -> str:
         # 减少接口请求直接使用jwt
@@ -230,6 +244,9 @@ class LuckyHelper(_PluginBase):
             "onlyonce": False,
             "backupsnotify": False,
             }
+
+    def get_page(self) -> List[dict]:
+        pass
 
     def stop_service(self):
         """
