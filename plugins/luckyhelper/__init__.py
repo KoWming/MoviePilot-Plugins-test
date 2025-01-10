@@ -57,15 +57,36 @@ class LuckyHelper(_PluginBase):
             self._host = config.get("host")
             self._openToken = config.get("openToken")
 
-            if self._backup_cron:
-                try:
-                    self._scheduler.add_job(func=self.backup,
-                                            trigger=CronTrigger.from_crontab(self._backup_cron),
-                                            name="Lucky助手-备份")
-                except Exception as err:
-                    logger.error(f"定时任务配置错误：{str(err)}")
-                    # 推送实时消息
-                    self.systemmessage.put(f"执行周期配置错误：{err}")
+            # 加载模块
+            if self._enabled or self._onlyonce:
+                # 定时服务
+                self._scheduler = BackgroundScheduler(timezone=settings.TZ)
+                # 立即运行一次
+                if self._onlyonce:
+                    logger.info(f"Lucky助手服务启动，立即运行一次")
+                    if self._backup_cron:
+                        self._scheduler.add_job(self.backup, 'date',
+                                                run_date=datetime.now(
+                                                    tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
+                                                name="Lucky助手-备份")
+                    # 关闭一次性开关
+                    self._onlyonce = False
+                    # 保存配置
+                    self.__update_config()
+                # 周期运行
+                if self._backup_cron:
+                    try:
+                        self._scheduler.add_job(func=self.backup,
+                                                trigger=CronTrigger.from_crontab(self._backup_cron),
+                                                name="Lucky助手-备份")
+                    except Exception as err:
+                        logger.error(f"定时任务配置错误：{str(err)}")
+                        # 推送实时消息
+                        self.systemmessage.put(f"执行周期配置错误：{err}")
+                # 启动任务
+                if self._scheduler.get_jobs():
+                    self._scheduler.print_jobs()
+                    self._scheduler.start()
 
     def get_state(self) -> bool:
         return self._enabled
