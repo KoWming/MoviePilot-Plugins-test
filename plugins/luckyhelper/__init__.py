@@ -1,6 +1,5 @@
 import glob
 import os
-import shutil
 import time
 import jwt
 from datetime import datetime, timedelta
@@ -10,7 +9,6 @@ import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app import schemas
 from app.core.config import settings
 from app.plugins import _PluginBase
 from typing import Any, List, Dict, Tuple, Optional
@@ -179,10 +177,11 @@ class LuckyHelper(_PluginBase):
         if self._notify:
             self.post_message(
                 mtype=NotificationType.SiteMessage,
-                title="【自动备份任务完成】",
+                title="LuckyHelper备份任务完成:",
                 text=f"创建备份{'成功' if success else '失败'}\n"
                     f"清理备份数量 {del_cnt}\n"
                     f"剩余备份数量 {bk_cnt - del_cnt}")
+            
 
         return success, msg
 
@@ -394,6 +393,32 @@ class LuckyHelper(_PluginBase):
                                             'variant': 'tonal',
                                             'text': '备份文件路径默认为本地映射的config/plugins/LuckyHelper。'
                                         }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VAlert',
+                                        'props': {
+                                            'type': 'info',
+                                            'variant': 'tonal'
+                                        },
+                                        'content': [
+                                            {
+                                                'component': 'div',
+                                                'html': '参考了 <a href="https://github.com/thsrite/MoviePilot-Plugins/" target="_blank" style="text-decoration: underline;">thsrite/MoviePilot-Plugins</a> 项目，实现了插件的相关功能。特此感谢 <a href="https://github.com/thsrite" target="_blank" style="text-decoration: underline;">thsrite</a> 大佬！'
+                                            },
+                                        ]
                                     }
                                 ]
                             }
