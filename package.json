@@ -1,7 +1,7 @@
 {
     "LuckyHelper": {
         "name": "Lucky助手",
-        "description": "配合Lucky,完成自动备份功能",
+        "description": "配合Lucky完成自动备份",
         "labels": "备份",
         "version": "1.7",
         "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/Lucky_B.png",
