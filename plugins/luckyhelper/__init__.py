@@ -15,6 +15,7 @@ from app.plugins import _PluginBase
 from typing import Any, List, Dict, Tuple, Optional
 from app.log import logger
 from app.schemas import NotificationType
+from app.utils.http import RequestUtils
 
 
 class LuckyHelper(_PluginBase):
@@ -39,6 +40,9 @@ class LuckyHelper(_PluginBase):
 
     # 私有属性
     _enabled = False
+    _host = None
+    _openToken = None
+
     # 任务执行间隔
     _cron = None
     _cnt = None
@@ -101,16 +105,39 @@ class LuckyHelper(_PluginBase):
         # 备份保存路径
         bk_path = Path(self._back_path) if self._back_path else self.get_data_path()
 
-        # 备份
-        zip_file = self.backup_file(bk_path=bk_path)
+        # 构造请求URL
+        backup_url = f"{self._host}/api/configure?openToken={self._openToken}"
 
-        if zip_file:
-            success = True
-            msg = f"备份完成 备份文件 {zip_file}"
-            logger.info(msg)
-        else:
+        try:
+            # 发送GET请求获取ZIP文件
+            result = (RequestUtils(headers={"Authorization": self.get_jwt()})
+                    .get_res(backup_url))
+            
+            # 检查响应状态码
+            if result.status_code == 200:
+                # 获取响应内容（ZIP文件的二进制数据）
+                zip_data = result.content
+                
+                # 定义保存文件的路径，使用原始文件名
+                zip_file_name = result.headers.get('Content-Disposition', '').split('filename=')[-1].strip('"')
+                if not zip_file_name:
+                    zip_file_name = f"bk_{time.strftime('%Y%m%d%H%M%S')}.zip"
+                zip_file_path = bk_path / zip_file_name
+                
+                # 保存文件到本地
+                with open(zip_file_path, 'wb') as zip_file:
+                    zip_file.write(zip_data)
+                
+                success = True
+                msg = f"备份完成 备份文件 {zip_file_path}"
+                logger.info(msg)
+            else:
+                success = False
+                msg = f"创建备份失败，状态码: {result.status_code}, 原因: {result.json().get('msg', '未知错误')}"
+                logger.error(msg)
+        except Exception as e:
             success = False
-            msg = "创建备份失败"
+            msg = f"创建备份失败，异常: {str(e)}"
             logger.error(msg)
 
         # 清理备份
@@ -118,7 +145,7 @@ class LuckyHelper(_PluginBase):
         del_cnt = 0
         if self._cnt:
             # 获取指定路径下所有以"bk"开头的文件，按照创建时间从旧到新排序
-            files = sorted(glob.glob(f"{bk_path}/bk**"), key=os.path.getctime)
+            files = sorted(glob.glob(f"{bk_path}/bk**.zip"), key=os.path.getctime)
             bk_cnt = len(files)
             # 计算需要删除的文件数
             del_cnt = bk_cnt - int(self._cnt)
@@ -139,9 +166,9 @@ class LuckyHelper(_PluginBase):
             self.post_message(
                 mtype=NotificationType.SiteMessage,
                 title="【自动备份任务完成】",
-                text=f"创建备份{'成功' if zip_file else '失败'}\n"
-                     f"清理备份数量 {del_cnt}\n"
-                     f"剩余备份数量 {bk_cnt - del_cnt}")
+                text=f"创建备份{'成功' if success else '失败'}\n"
+                    f"清理备份数量 {del_cnt}\n"
+                    f"剩余备份数量 {bk_cnt - del_cnt}")
 
         return success, msg
 
@@ -156,30 +183,6 @@ class LuckyHelper(_PluginBase):
             backup_file = f"bk_{time.strftime('%Y%m%d%H%M%S')}"
             backup_path = bk_path / backup_file
             backup_path.mkdir(parents=True)
-
-            # 把现有的相关文件进行copy备份
-            category_file = config_path / "category.yaml"
-            if category_file.exists():
-                shutil.copy(category_file, backup_path)
-            # 查找所有以 "user.db" 开头的文件
-            userdb_files = list(config_path.glob("user.db*"))
-            # 如果找到了任何匹配的文件，则进行复制
-            for userdb_file in userdb_files:
-                if userdb_file.exists():
-                    shutil.copy(userdb_file, backup_path)
-            app_file = config_path / "app.env"
-            if app_file.exists():
-                shutil.copy(app_file, backup_path)
-            cookies_path = config_path / "cookies"
-            if cookies_path.exists():
-                shutil.copytree(cookies_path, f'{backup_path}/cookies')
-
-            zip_file = str(backup_path) + '.zip'
-            if os.path.exists(zip_file):
-                zip_file = str(backup_path) + '.zip'
-            shutil.make_archive(str(backup_path), 'zip', str(backup_path))
-            shutil.rmtree(str(backup_path))
-            return zip_file
         except IOError:
             return None
 
