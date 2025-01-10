@@ -21,7 +21,7 @@ class LuckyHelper(_PluginBase):
     # 插件名称
     plugin_name = "Lucky助手"
     # 插件描述
-    plugin_desc = "配合Lucky,完成自动备份功能"
+    plugin_desc = "配合Lucky完成自动备份"
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/Lucky_B.png"
     # 插件版本
