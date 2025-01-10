@@ -25,7 +25,7 @@ class LuckyHelper(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/gxterry/MoviePilot-Plugins/main/icons/Docker_Copilot.png"
     # 插件版本
-    plugin_version = "1.4"
+    plugin_version = "1.5"
     # 插件作者
     plugin_author = "gxterry"
     # 作者主页
@@ -255,25 +255,25 @@ class LuckyHelper(_PluginBase):
                                         }
                                     }
                                 ]
-                            },
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
                             {
-                                'component': 'VRow',
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                },
                                 'content': [
                                     {
-                                        'component': 'VCol',
+                                        'component': 'VAlert',
                                         'props': {
-                                            'cols': 12,
-                                        },
-                                        'content': [
-                                            {
-                                                'component': 'VAlert',
-                                                'props': {
-                                                    'type': 'info',
-                                                    'variant': 'tonal',
-                                                    'text': '备份文件路径默认为本地映射的config/plugins/LuckyHelper。'
-                                                }
-                                            }
-                                        ]
+                                            'type': 'info',
+                                            'variant': 'tonal',
+                                            'text': '备份文件路径默认为本地映射的config/plugins/LuckyHelper。'
+                                        }
                                     }
                                 ]
                             }

@@ -3,7 +3,7 @@
         "name": "Lucky助手",
         "description": "配合Lucky,完成自动备份功能",
         "labels": "Docker",
-        "version": "1.4",
+        "version": "1.5",
         "icon": "https://raw.githubusercontent.com/gxterry/MoviePilot-Plugins/main/icons/Docker_Copilot.png",
         "author": "gxterry",
         "level": 1,
