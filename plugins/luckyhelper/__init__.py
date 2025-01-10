@@ -65,6 +65,8 @@ class LuckyHelper(_PluginBase):
             self._notify = config.get("notify")
             self._onlyonce = config.get("onlyonce")
             self._back_path = config.get("back_path")
+            self._host = config.get("host")
+            self._openToken = config.get("openToken")
 
             # 加载模块
         if self._onlyonce:
