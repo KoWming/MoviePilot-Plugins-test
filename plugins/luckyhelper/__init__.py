@@ -134,7 +134,7 @@ class LuckyHelper(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -150,14 +150,14 @@ class LuckyHelper(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
                                         'component': 'VSwitch',
                                         'props': {
-                                            'model': 'onlyonce',
-                                            'label': '立即运行一次',
+                                            'model': 'backupsnotify',
+                                            'label': '备份通知',
                                         }
                                     }
                                 ]
@@ -166,15 +166,14 @@ class LuckyHelper(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
                                         'component': 'VSwitch',
                                         'props': {
-                                            'model': 'backupsnotify',
-                                            'label': '备份通知',
-                                            'hint': '备份成功发送通知'
+                                            'model': 'onlyonce',
+                                            'label': '立即运行一次',
                                         }
                                     }
                                 ]
@@ -196,7 +195,7 @@ class LuckyHelper(_PluginBase):
                                         'props': {
                                             'model': 'host',
                                             'label': '服务器地址',
-                                            'hint': 'dockerCopilot服务地址 http(s)://ip:端口'
+                                            'hint': 'Lucky服务地址 http(s)://ip:prot'
                                         }
                                     }
                                 ]
@@ -211,9 +210,26 @@ class LuckyHelper(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'secretKey',
-                                            'label': 'secretKey',
-                                            'hint': 'dockerCopilot秘钥 环境变量查看'
+                                            'model': 'openToken',
+                                            'label': 'openToken',
+                                            'hint': 'Lucky openToken 设置里面打开'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'cnt',
+                                            'label': '最大保留备份数',
+                                            'hint': '保留备份数量'
                                         }
                                     }
                                 ]
@@ -230,7 +246,8 @@ class LuckyHelper(_PluginBase):
                                         'props': {
                                             'model': 'backupcron',
                                             'label': '自动备份',
-                                            'placeholder': '0 7 * * *'
+                                            'placeholder': '0 7 * * *',
+                                            'hint': '输入5位cron表达式'
                                         }
                                     }
                                 ]
