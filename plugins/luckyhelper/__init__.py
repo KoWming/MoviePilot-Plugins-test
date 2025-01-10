@@ -23,13 +23,13 @@ class LuckyHelper(_PluginBase):
     # 插件描述
     plugin_desc = "配合Lucky,完成自动备份功能"
     # 插件图标
-    plugin_icon = "https://raw.githubusercontent.com/gxterry/MoviePilot-Plugins/main/icons/Docker_Copilot.png"
+    plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/blob/main/icons/Lucky.svg"
     # 插件版本
-    plugin_version = "1.5"
+    plugin_version = "1.6"
     # 插件作者
-    plugin_author = "gxterry"
+    plugin_author = "KoWming"
     # 作者主页
-    author_url = "https://github.com/gxterry"
+    author_url = "https://github.com/KoWming"
     # 插件配置项ID前缀
     plugin_config_prefix = "luckyhelper_"
     # 加载顺序
