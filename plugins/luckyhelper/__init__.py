@@ -70,45 +70,45 @@ class LuckyHelper(_PluginBase):
     def get_state(self) -> bool:
         return self._enabled
 
-def backup(self):
-    """
-    备份
-    """
-    try:
-        logger.info(f"Lucky-备份-准备执行")
-        backup_url = '%s/api/configure?openToken=%s' % (self._host, self._openToken)
-        result = (RequestUtils(headers={"Authorization": self.get_jwt()})
-                  .get_res(backup_url))
-        
-        # 检查响应状态码
-        if result.status_code == 200:
-            # 假设响应内容是备份文件的二进制数据
-            backup_data = result.content
+    def backup(self):
+        """
+        备份
+        """
+        try:
+            logger.info(f"Lucky-备份-准备执行")
+            backup_url = '%s/api/configure?openToken=%s' % (self._host, self._openToken)
+            result = (RequestUtils(headers={"Authorization": self.get_jwt()})
+                    .get_res(backup_url))
             
-            # 定义保存文件的路径
-            backup_file_path = f"config/plugins/LuckyHelper/"
-            
-            # 保存文件到本地
-            with open(backup_file_path, 'wb') as backup_file:
-                backup_file.write(backup_data)
-            
-            logger.info(f"Lucky-备份完成，文件保存到 {backup_file_path}")
-            
-            if self._backups_notify:
-                self.post_message(
-                    mtype=NotificationType.Plugin,
-                    title="【Lucky助手-备份成功】",
-                    text=f"备份成功！文件保存到 {backup_file_path}")
-        else:
-            if self._backups_notify:
-                self.post_message(
-                    mtype=NotificationType.Plugin,
-                    title="【Lucky助手-备份失败】",
-                    text=f"备份失败！\n【失败原因】:{result.json().get('msg', '未知错误')}")
-            logger.error(f"Lucky-备份失败 Error code: {result.status_code}, message: {result.json().get('msg', '未知错误')}")
-    except Exception as e:
-        logger.error(f"Lucky-备份失败,网络异常,请检查Lucky服务是否正常: {str(e)}")
-        return []
+            # 检查响应状态码
+            if result.status_code == 200:
+                # 假设响应内容是备份文件的二进制数据
+                backup_data = result.content
+                
+                # 定义保存文件的路径
+                backup_file_path = f"config/plugins/LuckyHelper/"
+                
+                # 保存文件到本地
+                with open(backup_file_path, 'wb') as backup_file:
+                    backup_file.write(backup_data)
+                
+                logger.info(f"Lucky-备份完成，文件保存到 {backup_file_path}")
+                
+                if self._backups_notify:
+                    self.post_message(
+                        mtype=NotificationType.Plugin,
+                        title="【Lucky助手-备份成功】",
+                        text=f"备份成功！文件保存到 {backup_file_path}")
+            else:
+                if self._backups_notify:
+                    self.post_message(
+                        mtype=NotificationType.Plugin,
+                        title="【Lucky助手-备份失败】",
+                        text=f"备份失败！\n【失败原因】:{result.json().get('msg', '未知错误')}")
+                logger.error(f"Lucky-备份失败 Error code: {result.status_code}, message: {result.json().get('msg', '未知错误')}")
+        except Exception as e:
+            logger.error(f"Lucky-备份失败,网络异常,请检查Lucky服务是否正常: {str(e)}")
+            return []
 
     @eventmanager.register(EventType.PluginAction)
     def remote_sync(self, event: Event):
