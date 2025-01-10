@@ -82,6 +82,8 @@ class LuckyHelper(_PluginBase):
                 "cnt": self._cnt,
                 "notify": self._notify,
                 "back_path": self._back_path,
+                "host": self._host,
+                "openToken": self._openToken,
             })
 
             # 启动任务
@@ -96,6 +98,16 @@ class LuckyHelper(_PluginBase):
         if apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API密钥错误")
         return self.__backup()
+
+    def get_jwt(self) -> str:
+        # 减少接口请求直接使用jwt
+        payload = {
+            "exp": int(time.time()) + 28 * 24 * 60 * 60,
+            "iat": int(time.time())
+        }
+        encoded_jwt = jwt.encode(payload, self._openToken, algorithm="HS256")
+        logger.debug(f"LuckyHelper get jwt---》{encoded_jwt}")
+        return "Bearer "+encoded_jwt
 
     def __backup(self):
         """
@@ -202,16 +214,6 @@ class LuckyHelper(_PluginBase):
             "summary": "MoviePilot备份",
             "description": "MoviePilot备份",
         }]
-
-    def get_jwt(self) -> str:
-        # 减少接口请求直接使用jwt
-        payload = {
-            "exp": int(time.time()) + 28 * 24 * 60 * 60,
-            "iat": int(time.time())
-        }
-        encoded_jwt = jwt.encode(payload, self._secretKey, algorithm="HS256")
-        logger.debug(f"LuckyHelper get jwt---》{encoded_jwt}")
-        return "Bearer "+encoded_jwt
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
