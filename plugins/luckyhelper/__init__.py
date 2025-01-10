@@ -23,11 +23,11 @@ class LuckyHelper(_PluginBase):
     # 插件名称
     plugin_name = "Lucky助手"
     # 插件描述
-    plugin_desc = "配合Lucky完成自动备份"
+    plugin_desc = "定时备份Lucky配置文件"
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "1.7"
+    plugin_version = "1.0"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -93,14 +93,6 @@ class LuckyHelper(_PluginBase):
                 self._scheduler.print_jobs()
                 self._scheduler.start()
 
-#    def api_backup(self, apikey: str):
-#        """
-#        API调用备份
-#        """
-#        if apikey != settings.API_TOKEN:
-#            return schemas.Response(success=False, message="API密钥错误")
-#        return self.__backup()
-
     def get_jwt(self) -> str:
         # 减少接口请求直接使用jwt
         payload = {
@@ -144,8 +136,6 @@ class LuckyHelper(_PluginBase):
                 
                 # 定义保存文件的路径，使用原始文件名
                 zip_file_name = result.headers.get('Content-Disposition', '').split('filename=')[-1].strip('"')
-             #   if not zip_file_name:
-             #       zip_file_name = f"bk_{time.strftime('%Y%m%d%H%M%S')}.zip"
                 zip_file_path = bk_path / zip_file_name
                 
                 # 保存文件到本地
@@ -196,20 +186,6 @@ class LuckyHelper(_PluginBase):
 
         return success, msg
 
-#    @staticmethod
-#    def backup_file(bk_path: Path = None):
-#        """
-#        @param bk_path     自定义备份路径
-#        """
-#        try:
-#            # 创建备份文件夹
-#            config_path = Path(settings.CONFIG_PATH)
-#            backup_file = f"bk_{time.strftime('%Y%m%d%H%M%S')}"
-#            backup_path = bk_path / backup_file
-#            backup_path.mkdir(parents=True)
-#        except IOError:
-#            return None
-
     def get_state(self) -> bool:
         return self._enabled
 
@@ -219,13 +195,6 @@ class LuckyHelper(_PluginBase):
 
     def get_api(self) -> List[Dict[str, Any]]:
         pass
-#        return [{
-#            "path": "/backup",
-#            "endpoint": self.api_backup,
-#            "methods": ["GET"],
-#            "summary": "MoviePilot备份",
-#            "description": "MoviePilot备份",
-#        }]
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
@@ -246,16 +215,6 @@ class LuckyHelper(_PluginBase):
                 "func": self.__backup,
                 "kwargs": {}
             }]
-
-#    def backup(self) -> schemas.Response:
-#        """
-#        API调用备份
-#        """
-#        success, msg = self.__backup()
-#        return schemas.Response(
-#            success=success,
-#            message=msg
-#        )
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         """
@@ -374,8 +333,8 @@ class LuckyHelper(_PluginBase):
                                         'props': {
                                             'model': 'cron',
                                             'label': '备份周期',
-                                            'placeholder': '0 7 * * *',
-                                            'hint': '输入5位cron表达式',
+                                            'placeholder': '0 8 * * *',
+                                            'hint': '输入5位cron表达式，默认每天8点运行。',
                                             'persistent-hint': True
                                         }
                                     }
@@ -393,7 +352,7 @@ class LuckyHelper(_PluginBase):
                                         'props': {
                                             'model': 'cnt',
                                             'label': '保留份数',
-                                            'hint': '最大保留备份数',
+                                            'hint': '最大保留备份数，默认保留5份。',
                                             'persistent-hint': True
                                         }
                                     }
@@ -411,7 +370,7 @@ class LuckyHelper(_PluginBase):
                                         'props': {
                                             'model': 'back_path',
                                             'label': '备份保存路径',
-                                            'hint': '自定义备份路径',
+                                            'hint': '自定义备份路径，如没有映射默认即可。',
                                             'persistent-hint': True
                                         }
                                     }
@@ -446,7 +405,7 @@ class LuckyHelper(_PluginBase):
             "enabled": False,
             "notify": False,
             "onlyonce": False,
-            "cron": "0 7 * * *",
+            "cron": "0 8 * * *",
             "cnt": 5,
             "host": "",
             "openToken": "",

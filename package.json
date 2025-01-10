@@ -1,15 +1,14 @@
 {
     "LuckyHelper": {
         "name": "Lucky助手",
-        "description": "配合Lucky完成自动备份",
+        "description": "定时备份Lucky配置文件",
         "labels": "备份",
-        "version": "1.7",
+        "version": "1.0",
         "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/Lucky_B.png",
         "author": "KoWming",
         "level": 1,
         "history": {
-            "v1.1.2": "修复网络异常导致的数据无法加载问题",
-            "v1.1.1": "修复面板加载异常"
+            "v1.0": "初始版本。"
         },
         "v2": true
     }
