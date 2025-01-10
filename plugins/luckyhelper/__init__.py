@@ -44,6 +44,7 @@ class LuckyHelper(_PluginBase):
     _cnt = None
     _onlyonce = False
     _notify = False
+    _back_path = None
 
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
@@ -58,6 +59,7 @@ class LuckyHelper(_PluginBase):
             self._cnt = config.get("cnt")
             self._notify = config.get("notify")
             self._onlyonce = config.get("onlyonce")
+            self._back_path = config.get("back_path")
 
             # 加载模块
         if self._onlyonce:
@@ -74,6 +76,7 @@ class LuckyHelper(_PluginBase):
                 "enabled": self._enabled,
                 "cnt": self._cnt,
                 "notify": self._notify,
+                "back_path": self._back_path,
             })
 
             # 启动任务
@@ -95,8 +98,8 @@ class LuckyHelper(_PluginBase):
         """
         logger.info(f"当前时间 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} 开始备份")
 
-        # docker用默认路径
-        bk_path = self.get_data_path()
+        # 备份保存路径
+        bk_path = Path(self._back_path) if self._back_path else self.get_data_path()
 
         # 备份
         zip_file = self.backup_file(bk_path=bk_path)
@@ -158,9 +161,18 @@ class LuckyHelper(_PluginBase):
             category_file = config_path / "category.yaml"
             if category_file.exists():
                 shutil.copy(category_file, backup_path)
-            userdb_file = config_path / "user.db"
-            if userdb_file.exists():
-                shutil.copy(userdb_file, backup_path)
+            # 查找所有以 "user.db" 开头的文件
+            userdb_files = list(config_path.glob("user.db*"))
+            # 如果找到了任何匹配的文件，则进行复制
+            for userdb_file in userdb_files:
+                if userdb_file.exists():
+                    shutil.copy(userdb_file, backup_path)
+            app_file = config_path / "app.env"
+            if app_file.exists():
+                shutil.copy(app_file, backup_path)
+            cookies_path = config_path / "cookies"
+            if cookies_path.exists():
+                shutil.copytree(cookies_path, f'{backup_path}/cookies')
 
             zip_file = str(backup_path) + '.zip'
             if os.path.exists(zip_file):
@@ -326,7 +338,7 @@ class LuckyHelper(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -334,6 +346,7 @@ class LuckyHelper(_PluginBase):
                                         'props': {
                                             'model': 'cron',
                                             'label': '备份周期',
+                                            'placeholder': '0 7 * * *',
                                             'hint': '输入5位cron表达式',
                                             'persistent-hint': True
                                         }
@@ -344,7 +357,7 @@ class LuckyHelper(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -353,6 +366,24 @@ class LuckyHelper(_PluginBase):
                                             'model': 'cnt',
                                             'label': '保留份数',
                                             'hint': '最大保留备份数',
+                                            'persistent-hint': True
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 4
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'back_path',
+                                            'label': '备份保存路径',
+                                            'hint': '自定义备份路径',
                                             'persistent-hint': True
                                         }
                                     }
@@ -386,7 +417,8 @@ class LuckyHelper(_PluginBase):
         ], {
             "enabled": False,
             "request_method": "POST",
-            "webhook_url": ""
+            "webhook_url": "",
+            "back_path": str(self.get_data_path())
         }
 
     def get_page(self) -> List[dict]:
