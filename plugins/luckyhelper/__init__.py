@@ -195,7 +195,8 @@ class LuckyHelper(_PluginBase):
                                         'props': {
                                             'model': 'host',
                                             'label': 'Lucky地址',
-                                            'hint': 'Lucky服务地址 http(s)://ip:prot'
+                                            'hint': 'Lucky服务地址 http(s)://ip:prot',
+                                            'persistent-hint': True
                                         }
                                     }
                                 ]
@@ -212,7 +213,8 @@ class LuckyHelper(_PluginBase):
                                         'props': {
                                             'model': 'openToken',
                                             'label': 'openToken',
-                                            'hint': 'Lucky openToken 设置里面打开'
+                                            'hint': 'Lucky openToken 设置里面打开',
+                                            'persistent-hint': True
                                         }
                                     }
                                 ]
@@ -229,7 +231,8 @@ class LuckyHelper(_PluginBase):
                                         'props': {
                                             'model': 'cnt',
                                             'label': '保留份数',
-                                            'hint': '最大保留备份数'
+                                            'hint': '最大保留备份数',
+                                            'persistent-hint': True
                                         }
                                     }
                                 ]
@@ -247,7 +250,8 @@ class LuckyHelper(_PluginBase):
                                             'model': 'backupcron',
                                             'label': '自动备份',
                                             'placeholder': '0 7 * * *',
-                                            'hint': '输入5位cron表达式'
+                                            'hint': '输入5位cron表达式',
+                                            'persistent-hint': True
                                         }
                                     }
                                 ]
