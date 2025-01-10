@@ -4,7 +4,7 @@
         "description": "配合Lucky,完成自动备份功能",
         "labels": "备份",
         "version": "1.6",
-        "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/blob/main/icons/Lucky.svg",
+        "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/Lucky.svg",
         "author": "KoWming",
         "level": 1,
         "history": {
