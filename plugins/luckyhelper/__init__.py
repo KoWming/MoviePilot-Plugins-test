@@ -25,7 +25,7 @@ class LuckyHelper(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/gxterry/MoviePilot-Plugins/main/icons/Docker_Copilot.png"
     # 插件版本
-    plugin_version = "1.2"
+    plugin_version = "1.3"
     # 插件作者
     plugin_author = "gxterry"
     # 作者主页
@@ -194,7 +194,7 @@ class LuckyHelper(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'host',
-                                            'label': '服务器地址',
+                                            'label': 'Lucky地址',
                                             'hint': 'Lucky服务地址 http(s)://ip:prot'
                                         }
                                     }
@@ -228,8 +228,8 @@ class LuckyHelper(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'cnt',
-                                            'label': '最大保留备份数',
-                                            'hint': '保留备份数量'
+                                            'label': '保留份数',
+                                            'hint': '最大保留备份数'
                                         }
                                     }
                                 ]
