@@ -2,6 +2,7 @@ import glob
 import os
 import shutil
 import time
+import jwt
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -201,6 +202,16 @@ class LuckyHelper(_PluginBase):
             "summary": "MoviePilot备份",
             "description": "MoviePilot备份",
         }]
+
+    def get_jwt(self) -> str:
+        # 减少接口请求直接使用jwt
+        payload = {
+            "exp": int(time.time()) + 28 * 24 * 60 * 60,
+            "iat": int(time.time())
+        }
+        encoded_jwt = jwt.encode(payload, self._secretKey, algorithm="HS256")
+        logger.debug(f"LuckyHelper get jwt---》{encoded_jwt}")
+        return "Bearer "+encoded_jwt
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
