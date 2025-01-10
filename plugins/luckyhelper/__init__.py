@@ -45,7 +45,7 @@ class LuckyHelper(_PluginBase):
     _backup_cron = None
     _backups_notify = False
     _host = None
-    _secretKey = None
+    _openToken = None
     _scheduler: Optional[BackgroundScheduler] = None
 
     def init_plugin(self, config: dict = None):
@@ -55,13 +55,13 @@ class LuckyHelper(_PluginBase):
             self._backup_cron = config.get("backupcron")
             self._backups_notify = config.get("backupsnotify")
             self._host = config.get("host")
-            self._secretKey = config.get("secretKey")
+            self._openToken = config.get("openToken")
 
             if self._backup_cron:
                 try:
                     self._scheduler.add_job(func=self.backup,
                                             trigger=CronTrigger.from_crontab(self._backup_cron),
-                                            name="DC助手-备份")
+                                            name="Lucky助手-备份")
                 except Exception as err:
                     logger.error(f"定时任务配置错误：{str(err)}")
                     # 推送实时消息
@@ -70,33 +70,45 @@ class LuckyHelper(_PluginBase):
     def get_state(self) -> bool:
         return self._enabled
 
-    def backup(self):
-        """
-        备份
-        """
-        try:
-            logger.info(f"DC-备份-准备执行")
-            backup_url = '%s/api/container/backup' % (self._host)
-            result = (RequestUtils(headers={"Authorization": self.get_jwt()})
-                      .get_res(backup_url))
-            data = result.json()
-            if data["code"] == 200:
-                if self._backups_notify:
-                    self.post_message(
-                        mtype=NotificationType.Plugin,
-                        title="【DC助手-备份成功】",
-                        text=f"镜像备份成功！")
-                logger.info(f"DC-备份完成")
-            else:
-                if self._backups_notify:
-                    self.post_message(
-                        mtype=NotificationType.Plugin,
-                        title="【DC助手-备份失败】",
-                        text=f"镜像备份失败拉~！\n【失败原因】:{data['msg']}")
-                logger.error(f"DC-备份失败 Error code: {data['code']}, message: {data['msg']}")
-        except Exception as e:
-            logger.error(f"DC-备份失败,网络异常,请检查DockerCopilot服务是否正常: {str(e)}")
-            return []
+def backup(self):
+    """
+    备份
+    """
+    try:
+        logger.info(f"Lucky-备份-准备执行")
+        backup_url = '%s/api/configure?openToken=%s' % (self._host, self._openToken)
+        result = (RequestUtils(headers={"Authorization": self.get_jwt()})
+                  .get_res(backup_url))
+        
+        # 检查响应状态码
+        if result.status_code == 200:
+            # 假设响应内容是备份文件的二进制数据
+            backup_data = result.content
+            
+            # 定义保存文件的路径
+            backup_file_path = f"config/plugins/LuckyHelper/"
+            
+            # 保存文件到本地
+            with open(backup_file_path, 'wb') as backup_file:
+                backup_file.write(backup_data)
+            
+            logger.info(f"Lucky-备份完成，文件保存到 {backup_file_path}")
+            
+            if self._backups_notify:
+                self.post_message(
+                    mtype=NotificationType.Plugin,
+                    title="【Lucky助手-备份成功】",
+                    text=f"备份成功！文件保存到 {backup_file_path}")
+        else:
+            if self._backups_notify:
+                self.post_message(
+                    mtype=NotificationType.Plugin,
+                    title="【Lucky助手-备份失败】",
+                    text=f"备份失败！\n【失败原因】:{result.json().get('msg', '未知错误')}")
+            logger.error(f"Lucky-备份失败 Error code: {result.status_code}, message: {result.json().get('msg', '未知错误')}")
+    except Exception as e:
+        logger.error(f"Lucky-备份失败,网络异常,请检查Lucky服务是否正常: {str(e)}")
+        return []
 
     @eventmanager.register(EventType.PluginAction)
     def remote_sync(self, event: Event):
@@ -116,7 +128,7 @@ class LuckyHelper(_PluginBase):
             "iat": int(time.time())
         }
         encoded_jwt = jwt.encode(payload, self._secretKey, algorithm="HS256")
-        logger.debug(f"DC helper get jwt---》{encoded_jwt}")
+        logger.debug(f"LuckyHelper get jwt---》{encoded_jwt}")
         return "Bearer "+encoded_jwt
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
