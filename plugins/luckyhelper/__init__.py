@@ -23,9 +23,9 @@ class LuckyHelper(_PluginBase):
     # 插件描述
     plugin_desc = "定时备份Lucky配置文件"
     # 插件图标
-    plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/Lucky_B.png"
+    plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.1"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -308,7 +308,7 @@ class LuckyHelper(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'openToken',
-                                            'label': 'openToken',
+                                            'label': 'OpenToken',
                                             'hint': 'Lucky openToken 设置里面打开',
                                             'persistent-hint': True
                                         }
@@ -328,7 +328,7 @@ class LuckyHelper(_PluginBase):
                                 },
                                 'content': [
                                     {
-                                        'component': 'VTextField',
+                                        'component': 'VCronField',
                                         'props': {
                                             'model': 'cron',
                                             'label': '备份周期',
@@ -415,9 +415,45 @@ class LuckyHelper(_PluginBase):
                                         },
                                         'content': [
                                             {
-                                                'component': 'div',
-                                                'html': '参考了 <a href="https://github.com/thsrite/MoviePilot-Plugins/" target="_blank" style="text-decoration: underline;">thsrite/MoviePilot-Plugins</a> 项目，实现了插件的相关功能。特此感谢 <a href="https://github.com/thsrite" target="_blank" style="text-decoration: underline;">thsrite</a> 大佬！'
+                                                'component': 'span',
+                                                'text': '参考了 '
                                             },
+                                            {
+                                                'component': 'a',
+                                                'props': {
+                                                    'href': 'https://github.com/thsrite/MoviePilot-Plugins/',
+                                                    'target': '_blank',
+                                                    'style': 'text-decoration: underline;'
+                                                },
+                                                'content': [
+                                                    {
+                                                        'component': 'u',
+                                                        'text': 'thsrite/MoviePilot-Plugins'
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'span',
+                                                'text': ' 项目，实现了插件的相关功能。特此感谢 '
+                                            },
+                                            {
+                                                'component': 'a',
+                                                'props': {
+                                                    'href': 'https://github.com/thsrite',
+                                                    'target': '_blank',
+                                                    'style': 'text-decoration: underline;'
+                                                },
+                                                'content': [
+                                                    {
+                                                        'component': 'u',
+                                                        'text': 'thsrite'
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'span',
+                                                'text': ' 大佬！ '
+                                            }
                                         ]
                                     }
                                 ]
