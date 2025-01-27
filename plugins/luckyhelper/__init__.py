@@ -25,7 +25,7 @@ class LuckyHelper(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -157,7 +157,7 @@ class LuckyHelper(_PluginBase):
         del_cnt = 0
         if self._cnt:
             # 获取指定路径下所有以"lucky"开头的文件，按照创建时间从旧到新排序
-            files = sorted(glob.glob(f"{bk_path}/lucky*.zip"), key=os.path.getctime)
+            files = sorted(glob.glob(f"{bk_path}/lucky**"), key=os.path.getctime)
             bk_cnt = len(files)
             # 计算需要删除的文件数
             del_cnt = bk_cnt - int(self._cnt)
