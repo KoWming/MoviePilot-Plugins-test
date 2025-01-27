@@ -177,10 +177,13 @@ class LuckyHelper(_PluginBase):
         if self._notify:
             self.post_message(
                 mtype=NotificationType.SiteMessage,
-                title="LuckyHelper备份任务完成:",
+                title="【LuckyHelper备份完成】:",
                 text=f"创建备份{'成功' if success else '失败'}\n"
+                    f"获取到 {bk_path} 路径下备份文件数量 {bk_cnt} 保留数量 {int(self._cnt)} 需要删除备份文件数量 {del_cnt}\n"
                     f"清理备份数量 {del_cnt}\n"
-                    f"剩余备份数量 {bk_cnt - del_cnt}")
+                    f"剩余备份数量 {bk_cnt - del_cnt}\n"
+                    f"备份时间 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+)
             
 
         return success, msg
