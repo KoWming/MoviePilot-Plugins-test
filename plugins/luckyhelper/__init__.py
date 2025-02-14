@@ -23,9 +23,9 @@ class LuckyHelper(_PluginBase):
     # 插件描述
     plugin_desc = "定时备份Lucky配置文件"
     # 插件图标
-    plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/Lucky_B.png"
+    plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -157,7 +157,7 @@ class LuckyHelper(_PluginBase):
         del_cnt = 0
         if self._cnt:
             # 获取指定路径下所有以"lucky"开头的文件，按照创建时间从旧到新排序
-            files = sorted(glob.glob(f"{bk_path}/lucky*.zip"), key=os.path.getctime)
+            files = sorted(glob.glob(f"{bk_path}/lucky**"), key=os.path.getctime)
             bk_cnt = len(files)
             # 计算需要删除的文件数
             del_cnt = bk_cnt - int(self._cnt)
@@ -177,10 +177,13 @@ class LuckyHelper(_PluginBase):
         if self._notify:
             self.post_message(
                 mtype=NotificationType.SiteMessage,
-                title="LuckyHelper备份任务完成:",
-                text=f"创建备份{'成功' if success else '失败'}\n"
-                    f"清理备份数量 {del_cnt}\n"
-                    f"剩余备份数量 {bk_cnt - del_cnt}")
+                title="【LuckyHelper备份完成】:",
+                text=f"备份{'成功' if success else '失败'}\n"
+                    f"获取到 {bk_path}\n路径下备份文件数量: {bk_cnt}\n"
+                    f"清理备份数量: {del_cnt}\n"
+                    f"剩余备份数量: {bk_cnt - del_cnt}\n"
+                    f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+)
             
 
         return success, msg
@@ -308,7 +311,7 @@ class LuckyHelper(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'openToken',
-                                            'label': 'openToken',
+                                            'label': 'OpenToken',
                                             'hint': 'Lucky openToken 设置里面打开',
                                             'persistent-hint': True
                                         }
@@ -328,7 +331,7 @@ class LuckyHelper(_PluginBase):
                                 },
                                 'content': [
                                     {
-                                        'component': 'VTextField',
+                                        'component': 'VCronField',
                                         'props': {
                                             'model': 'cron',
                                             'label': '备份周期',
@@ -415,9 +418,45 @@ class LuckyHelper(_PluginBase):
                                         },
                                         'content': [
                                             {
-                                                'component': 'div',
-                                                'html': '参考了 <a href="https://github.com/thsrite/MoviePilot-Plugins/" target="_blank" style="text-decoration: underline;">thsrite/MoviePilot-Plugins</a> 项目，实现了插件的相关功能。特此感谢 <a href="https://github.com/thsrite" target="_blank" style="text-decoration: underline;">thsrite</a> 大佬！'
+                                                'component': 'span',
+                                                'text': '参考了 '
                                             },
+                                            {
+                                                'component': 'a',
+                                                'props': {
+                                                    'href': 'https://github.com/thsrite/MoviePilot-Plugins/',
+                                                    'target': '_blank',
+                                                    'style': 'text-decoration: underline;'
+                                                },
+                                                'content': [
+                                                    {
+                                                        'component': 'u',
+                                                        'text': 'thsrite/MoviePilot-Plugins'
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'span',
+                                                'text': ' 项目，实现了插件的相关功能。特此感谢 '
+                                            },
+                                            {
+                                                'component': 'a',
+                                                'props': {
+                                                    'href': 'https://github.com/thsrite',
+                                                    'target': '_blank',
+                                                    'style': 'text-decoration: underline;'
+                                                },
+                                                'content': [
+                                                    {
+                                                        'component': 'u',
+                                                        'text': 'thsrite'
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'span',
+                                                'text': ' 大佬！ '
+                                            }
                                         ]
                                     }
                                 ]
