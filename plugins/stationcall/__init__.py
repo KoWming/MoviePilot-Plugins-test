@@ -25,7 +25,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.4"
+    plugin_version = "0.5"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -316,7 +316,7 @@ class StationCall(_PluginBase):
                                             'model': 'site_cookies',
                                             'label': '站点Cookie',
                                             'rows': 5,
-                                            'placeholder': '每一行一个Cookie,配置方式见下方提示。'
+                                            'placeholder': '每一行一个Cookie，配置方式见下方提示。'
                                         }
                                     }
                                 ]
@@ -363,9 +363,8 @@ class StationCall(_PluginBase):
                                 'props': {
                                     'type': 'info',
                                     'variant': 'tonal',
-                                    'text': '站点列表: \n qingwa: ‘https://www.***.com/shoutbox.php’\n'
-                                            '站点Cookie: \n qingwa: ‘cookie’ \n'
-                                            '地址中的标点符号均为英文半角符号。'
+                                    'text': '站点列表: \n qingwa: \'https://www.***.com/shoutbox.php\'\n'
+                                            '站点Cookie: \n qingwa: \'cookie\' \n'
                                 }
                             }
                         ]
