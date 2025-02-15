@@ -1,19 +1,19 @@
 {
-   "LuckyHelper": {
-    "name": "Lucky助手",
-    "description": "定时备份Lucky配置文件",
-    "labels": "备份",
-    "version": "1.2",
-    "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png",
-    "author": "KoWming",
-    "level": 1,
-    "history": {
-        "v1.2": "修复备份删除逻辑。",
-        "v1.1": "适配VCronField、修复显示异常。",
-        "v1.0": "初始版本。"
+    "LuckyHelper": {
+        "name": "Lucky助手",
+        "description": "定时备份Lucky配置文件",
+        "labels": "备份",
+        "version": "1.2",
+        "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png",
+        "author": "KoWming",
+        "level": 1,
+        "history": {
+            "v1.2": "修复备份删除逻辑。",
+            "v1.1": "适配VCronField、修复显示异常。",
+            "v1.0": "初始版本。"
+        },
+        "v2": true
     },
-    "v2": true
-  },
     "InvitesSignin": {
         "name": "药丸签到",
         "description": "药丸论坛签到。",
@@ -25,6 +25,19 @@
         "v2": true,
         "history": {
             "v1.4": "自定义保留消息天数"
+        }
+    },
+    "StationCall": {
+        "name": "站点喊话",
+        "description": "特定站点喊话领取奖励。",
+        "labels": "站点",
+        "version": "0.1",
+        "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png",
+        "author": "KoWming",
+        "level": 2,
+        "v2": true,
+        "history": {
+            "v0.1": "初始版本。"
         }
     }
 }
