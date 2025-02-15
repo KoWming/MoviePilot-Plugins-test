@@ -364,7 +364,8 @@ class StationCall(_PluginBase):
                                     'type': 'info',
                                     'variant': 'tonal',
                                     'text': '站点列表: \n qingwa: \'https://www.***.com/shoutbox.php\'     \n'
-                                            '站点Cookie: \n qingwa: \'cookie\' \n'
+                                            '站点Cookie: \n qingwa: \'cookie\'     \n'
+                                            '多行使用,号连接。\n'
                                 }
                             }
                         ]
