@@ -25,7 +25,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.3"
+    plugin_version = "0.4"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -294,8 +294,7 @@ class StationCall(_PluginBase):
                                             'model': 'site_urls',
                                             'label': '站点列表',
                                             'rows': 5,
-                                            'placeholder': '每一行一个站点，配置方式：\n'
-                                                           '站点拼音: https://域名/shoutbox.php \n'
+                                            'placeholder': '每一行一个站点，配置方式见下方提示。'
                                         }
                                     }
                                 ]
@@ -317,8 +316,7 @@ class StationCall(_PluginBase):
                                             'model': 'site_cookies',
                                             'label': '站点Cookie',
                                             'rows': 5,
-                                            'placeholder': '每一行一个，配置方式：\n'
-                                                           '站点拼音: ‘Cookie’\n'
+                                            'placeholder': '每一行一个Cookie,配置方式见下方提示。'
                                         }
                                     }
                                 ]
@@ -327,123 +325,63 @@ class StationCall(_PluginBase):
                     },
                 ]
             },
+            {
+                'component': 'VRow',
+                'content': [
                     {
-                        'component': 'VRow',
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                            'md': 12
+                        },
                         'content': [
                             {
-                                'component': 'VCol',
+                                'component': 'VCronField',
                                 'props': {
-                                    'cols': 12,
-                                    'md': 4
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VCronField',
-                                        'props': {
-                                            'model': 'cron',
-                                            'label': '执行周期',
-                                            'placeholder': '0 8 * * *',
-                                            'hint': '输入5位cron表达式，默认每天8点运行。',
-                                            'persistent-hint': True
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'info',
-                                            'variant': 'tonal',
-                                            'text': '备份文件路径默认为本地映射的config/plugins/LuckyHelper。'
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'info',
-                                            'variant': 'tonal'
-                                        },
-                                        'content': [
-                                            {
-                                                'component': 'span',
-                                                'text': '参考了 '
-                                            },
-                                            {
-                                                'component': 'a',
-                                                'props': {
-                                                    'href': 'https://github.com/thsrite/MoviePilot-Plugins/',
-                                                    'target': '_blank',
-                                                    'style': 'text-decoration: underline;'
-                                                },
-                                                'content': [
-                                                    {
-                                                        'component': 'u',
-                                                        'text': 'thsrite/MoviePilot-Plugins'
-                                                    }
-                                                ]
-                                            },
-                                            {
-                                                'component': 'span',
-                                                'text': ' 项目，实现了插件的相关功能。特此感谢 '
-                                            },
-                                            {
-                                                'component': 'a',
-                                                'props': {
-                                                    'href': 'https://github.com/thsrite',
-                                                    'target': '_blank',
-                                                    'style': 'text-decoration: underline;'
-                                                },
-                                                'content': [
-                                                    {
-                                                        'component': 'u',
-                                                        'text': 'thsrite'
-                                                    }
-                                                ]
-                                            },
-                                            {
-                                                'component': 'span',
-                                                'text': ' 大佬！ '
-                                            }
-                                        ]
-                                    }
-                                ]
+                                    'model': 'cron',
+                                    'label': '执行周期',
+                                    'placeholder': '0 8 * * *',
+                                    'hint': '输入5位cron表达式，默认每天8点运行。',
+                                    'persistent-hint': True
+                                }
                             }
                         ]
                     }
-        ], {
-            "enabled": False,
-            "notify": False,
-            "onlyonce": False,
-            "cron": "0 8 * * *",
-            "cnt": 5,
-            "host": "",
-            "openToken": "",
-            "back_path": str(self.get_data_path())
-        }
+                ]
+            },
+            {
+                'component': 'VRow',
+                'content': [
+                    {
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                        },
+                        'content': [
+                            {
+                                'component': 'VAlert',
+                                'props': {
+                                    'type': 'info',
+                                    'variant': 'tonal',
+                                    'text': '站点列表: \n qingwa: ‘https://www.***.com/shoutbox.php’\n'
+                                            '站点Cookie: \n qingwa: ‘cookie’ \n'
+                                            '地址中的标点符号均为英文半角符号。'
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            ], {
+                "enabled": False,
+                "notify": False,
+                "onlyonce": False,
+                "cron": "0 8 * * *",
+                "cnt": 5,
+                "host": "",
+                "openToken": "",
+                "back_path": str(self.get_data_path())
+            }
 
     def get_page(self) -> List[dict]:
         pass
