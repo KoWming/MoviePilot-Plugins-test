@@ -25,7 +25,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.2"
+    plugin_version = "0.3"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -285,71 +285,51 @@ class StationCall(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 12,
-                                    'md': 4
+                                    'cols': 12
                                 },
                                 'content': [
                                     {
-                                        'component': 'VSwitch',
+                                        'component': 'VTextarea',
                                         'props': {
-                                            'model': 'notify',
-                                            'label': '开启大青虫',
+                                            'model': 'site_urls',
+                                            'label': '站点列表',
+                                            'rows': 5,
+                                            'placeholder': '每一行一个站点，配置方式：\n'
+                                                           '站点拼音: https://域名/shoutbox.php \n'
                                         }
                                     }
                                 ]
-                            },
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 12,
-                                    'md': 6
+                                    'cols': 12
                                 },
                                 'content': [
                                     {
-                                        'component': 'VTextField',
+                                        'component': 'VTextarea',
                                         'props': {
-                                            'model': 'host',
+                                            'model': 'site_cookies',
                                             'label': '站点Cookie',
-                                            'hint': '填入站点Cookie',
-                                            'persistent-hint': True
+                                            'rows': 5,
+                                            'placeholder': '每一行一个，配置方式：\n'
+                                                           '站点拼音: ‘Cookie’\n'
                                         }
                                     }
                                 ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 4
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'notify',
-                                            'label': '开启青蛙',
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'openToken',
-                                            'label': '站点Cookie',
-                                            'hint': '填入站点Cookie',
-                                            'persistent-hint': True
-                                        }
-                                    }
-                                ]
-                            },
+                            }
+                        ]
+                    },
+                ]
+            },
+                    {
+                        'component': 'VRow',
+                        'content': [
                             {
                                 'component': 'VCol',
                                 'props': {
@@ -358,61 +338,12 @@ class StationCall(_PluginBase):
                                 },
                                 'content': [
                                     {
-                                        'component': 'VSwitch',
+                                        'component': 'VCronField',
                                         'props': {
-                                            'model': 'notify',
-                                            'label': '开启库飞',
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'openToken',
-                                            'label': '站点Cookie',
-                                            'hint': '填入站点Cookie',
-                                            'persistent-hint': True
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 4
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'notify',
-                                            'label': '开启象岛',
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'openToken',
-                                            'label': '站点Cookie',
-                                            'hint': '填入站点Cookie',
+                                            'model': 'cron',
+                                            'label': '执行周期',
+                                            'placeholder': '0 8 * * *',
+                                            'hint': '输入5位cron表达式，默认每天8点运行。',
                                             'persistent-hint': True
                                         }
                                     }
@@ -427,25 +358,82 @@ class StationCall(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 12
                                 },
                                 'content': [
                                     {
-                                        'component': 'VCronField',
+                                        'component': 'VAlert',
                                         'props': {
-                                            'model': 'cron',
-                                            'label': '备份周期',
-                                            'placeholder': '0 8 * * *',
-                                            'hint': '输入5位cron表达式，默认每天8点运行。',
-                                            'persistent-hint': True
+                                            'type': 'info',
+                                            'variant': 'tonal',
+                                            'text': '备份文件路径默认为本地映射的config/plugins/LuckyHelper。'
                                         }
                                     }
                                 ]
                             }
                         ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VAlert',
+                                        'props': {
+                                            'type': 'info',
+                                            'variant': 'tonal'
+                                        },
+                                        'content': [
+                                            {
+                                                'component': 'span',
+                                                'text': '参考了 '
+                                            },
+                                            {
+                                                'component': 'a',
+                                                'props': {
+                                                    'href': 'https://github.com/thsrite/MoviePilot-Plugins/',
+                                                    'target': '_blank',
+                                                    'style': 'text-decoration: underline;'
+                                                },
+                                                'content': [
+                                                    {
+                                                        'component': 'u',
+                                                        'text': 'thsrite/MoviePilot-Plugins'
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'span',
+                                                'text': ' 项目，实现了插件的相关功能。特此感谢 '
+                                            },
+                                            {
+                                                'component': 'a',
+                                                'props': {
+                                                    'href': 'https://github.com/thsrite',
+                                                    'target': '_blank',
+                                                    'style': 'text-decoration: underline;'
+                                                },
+                                                'content': [
+                                                    {
+                                                        'component': 'u',
+                                                        'text': 'thsrite'
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'span',
+                                                'text': ' 大佬！ '
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
                     }
-                ]
-            }
         ], {
             "enabled": False,
             "notify": False,
