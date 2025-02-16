@@ -23,7 +23,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.6"
+    plugin_version = "0.6.1"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -77,7 +77,7 @@ class StationCall(_PluginBase):
             if self._onlyonce:
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info(f"站点喊话服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.main, trigger='date',
+                self._scheduler.add_job(func=self.site_chat_room, trigger='date',
                                         run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
                                         name="站点喊话")
                 # 关闭一次性开关
