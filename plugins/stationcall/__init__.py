@@ -23,7 +23,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.5.9"
+    plugin_version = "0.6"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -77,7 +77,7 @@ class StationCall(_PluginBase):
             if self._onlyonce:
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info(f"站点喊话服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.__backup, trigger='date',
+                self._scheduler.add_job(func=self.main, trigger='date',
                                         run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
                                         name="站点喊话")
                 # 关闭一次性开关
@@ -100,7 +100,7 @@ class StationCall(_PluginBase):
             if self._enabled and self._cron:
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info(f"站点喊话服务启动，定时任务: {self._cron}")
-                self._scheduler.add_job(func=self.main, trigger=CronTrigger.from_crontab(self._cron),
+                self._scheduler.add_job(func=self.site_chat_room, trigger=CronTrigger.from_crontab(self._cron),
                                         name="站点喊话定时服务")
                 self._scheduler.start()
 
@@ -201,9 +201,9 @@ class StationCall(_PluginBase):
             logger.error(f"发送消息到 {site_config['url']} 时发生错误: {e}")
             return False  # 喊话失败
 
-    def main(self):
+    def site_chat_room(self):
         """
-        主函数，遍历所有站点并发送消息
+        遍历所有站点并发送消息
         """
         # 存储所有站点的喊话结果
         results = []
@@ -268,7 +268,7 @@ class StationCall(_PluginBase):
                 "id": "StationCall",
                 "name": "站点喊话定时服务",
                 "trigger": CronTrigger.from_crontab(self._cron),
-                "func": self.main,
+                "func": self.site_chat_room,
                 "kwargs": {}
             }]
 
