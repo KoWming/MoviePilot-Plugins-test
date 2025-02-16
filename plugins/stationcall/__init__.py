@@ -25,7 +25,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.5.2"
+    plugin_version = "0.5.3"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -285,7 +285,8 @@ class StationCall(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 12
+                                    'cols': 12,
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -307,7 +308,8 @@ class StationCall(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 12
+                                    'cols': 12,
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -323,6 +325,28 @@ class StationCall(_PluginBase):
                             }
                         ]
                     },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextarea',
+                                        'props': {
+                                            'model': 'site_room',
+                                            'label': '聊天内容',
+                                            'rows': 5,
+                                            'placeholder': '每一行一个内容，配置方式见下方提示。'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
                 ]
             },
             {
