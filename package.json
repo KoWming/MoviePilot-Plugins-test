@@ -32,7 +32,7 @@
         "name": "站点喊话",
         "description": "特定站点喊话领取奖励。",
         "labels": "站点",
-        "version": "0.5.8",
+        "version": "0.5.9",
         "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png",
         "author": "KoWming",
         "level": 2,
