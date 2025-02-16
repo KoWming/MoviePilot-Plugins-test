@@ -23,7 +23,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.5.8"
+    plugin_version = "0.5.9"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -58,13 +58,13 @@ class StationCall(_PluginBase):
         self.stop_service()
 
         if config:
-            self._enabled = config.get("enabled")
-            self._cron = config.get("cron")
-            self._notify = config.get("notify")
-            self._onlyonce = config.get("onlyonce")
-            self._site_urls = config.get("urls")
-            self._site_cookies = config.get("cookies")
-            self._sites_room = config.get("room")
+            self._enabled = config.get("enabled", False)
+            self._cron = config.get("cron", "")
+            self._notify = config.get("notify", False)
+            self._onlyonce = config.get("onlyonce", False)
+            self._site_urls = config.get("urls", "")
+            self._site_cookies = config.get("cookies", "")
+            self._sites_room = config.get("room", "")
 
             # 加载模块
             self._site_urls = self.parse_site_urls(self._site_urls)
@@ -238,18 +238,12 @@ class StationCall(_PluginBase):
         if self._notify:
             self.post_message(
                 mtype=NotificationType.SiteMessage,
-                title="【LuckyHelper备份完成】:",
-                text=f"备份{'成功' if success else '失败'}\n"
-                    f"获取到 {bk_path}\n路径下备份文件数量: {bk_cnt}\n"
-                    f"清理备份数量: {del_cnt}\n"
-                    f"剩余备份数量: {bk_cnt - del_cnt}\n"
-                    f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+                title=title,
+                text=content
             )
 
-        return success
-
     def get_state(self) -> bool:
-        return self._enabled     
+        return self._enabled
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
@@ -274,7 +268,7 @@ class StationCall(_PluginBase):
                 "id": "StationCall",
                 "name": "站点喊话定时服务",
                 "trigger": CronTrigger.from_crontab(self._cron),
-                "func": self.__backup,
+                "func": self.main,
                 "kwargs": {}
             }]
 
@@ -451,15 +445,15 @@ class StationCall(_PluginBase):
                     }
                 ]
             },
-            ], {
-                "enabled": False,
-                "notify": False,
-                "onlyonce": False,
-                "cron": "0 8 * * *",
-                "site_urls": "",
-                "site_cookies": "",
-                "site_room": "",
-            }
+        ], {
+            "enabled": False,
+            "notify": False,
+            "onlyonce": False,
+            "cron": "0 8 * * *",
+            "site_urls": "",
+            "site_cookies": "",
+            "site_room": "",
+        }
 
     def get_page(self) -> List[dict]:
         pass
