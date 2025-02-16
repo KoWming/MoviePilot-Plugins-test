@@ -1,20 +1,18 @@
 import glob
 import os
 import time
-import jwt
 from datetime import datetime, timedelta
 from pathlib import Path
-
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-
 from app.core.config import settings
 from app.plugins import _PluginBase
 from typing import Any, List, Dict, Tuple, Optional
 from app.log import logger
 from app.schemas import NotificationType
 from app.utils.http import RequestUtils
+from urllib.parse import urlparse, urlunparse
 
 
 class StationCall(_PluginBase):
@@ -25,7 +23,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.5.7"
+    plugin_version = "0.5.8"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -39,15 +37,18 @@ class StationCall(_PluginBase):
 
     # 私有属性
     _enabled = False
-    _host = None
-    _openToken = None
+    _site_urls: list[Dict] = []
+    _site_cookies: list[Dict] = []
+    _sites_room: list[Dict] = []
+
+    _site_urls: str = ""
+    _site_cookies: str = ""
+    _sites_room: str = ""
 
     # 任务执行间隔
     _cron = None
-    _cnt = None
     _onlyonce = False
     _notify = False
-    _back_path = None
 
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
@@ -59,119 +60,179 @@ class StationCall(_PluginBase):
         if config:
             self._enabled = config.get("enabled")
             self._cron = config.get("cron")
-            self._cnt = config.get("cnt")
             self._notify = config.get("notify")
             self._onlyonce = config.get("onlyonce")
-            self._back_path = config.get("back_path")
-            self._host = config.get("host")
-            self._openToken = config.get("openToken")
+            self._site_urls = config.get("urls")
+            self._site_cookies = config.get("cookies")
+            self._sites_room = config.get("room")
 
             # 加载模块
-        if self._onlyonce:
-            self._scheduler = BackgroundScheduler(timezone=settings.TZ)
-            logger.info(f"自动备份服务启动，立即运行一次")
-            self._scheduler.add_job(func=self.__backup, trigger='date',
-                                    run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                    name="自动备份")
-            # 关闭一次性开关
-            self._onlyonce = False
-            self.update_config({
-                "onlyonce": False,
-                "cron": self._cron,
-                "enabled": self._enabled,
-                "cnt": self._cnt,
-                "notify": self._notify,
-                "back_path": self._back_path,
-                "host": self._host,
-                "openToken": self._openToken,
-            })
+            self._site_urls = self.parse_site_urls(self._site_urls)
+            self._site_cookies = self.parse_site_cookies(self._site_cookies)
+            self._sites_room = self.parse_sites_room(self._sites_room)
 
-            # 启动任务
-            if self._scheduler.get_jobs():
-                self._scheduler.print_jobs()
+            # 合并解析后的信息
+            self._merged_sites = self.merge_site_info(self._site_urls, self._site_cookies, self._sites_room)
+
+            if self._onlyonce:
+                self._scheduler = BackgroundScheduler(timezone=settings.TZ)
+                logger.info(f"站点喊话服务启动，立即运行一次")
+                self._scheduler.add_job(func=self.__backup, trigger='date',
+                                        run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
+                                        name="站点喊话")
+                # 关闭一次性开关
+                self._onlyonce = False
+                self.update_config({
+                    "onlyonce": False,
+                    "cron": self._cron,
+                    "enabled": self._enabled,
+                    "notify": self._notify,
+                    "urls": config.get("urls"),
+                    "cookies": config.get("cookies"),
+                    "room": config.get("room"),
+                })
+
+                # 启动任务
+                if self._scheduler.get_jobs():
+                    self._scheduler.print_jobs()
+                    self._scheduler.start()
+
+            if self._enabled and self._cron:
+                self._scheduler = BackgroundScheduler(timezone=settings.TZ)
+                logger.info(f"站点喊话服务启动，定时任务: {self._cron}")
+                self._scheduler.add_job(func=self.main, trigger=CronTrigger.from_crontab(self._cron),
+                                        name="站点喊话定时服务")
                 self._scheduler.start()
 
-    def get_jwt(self) -> str:
-        # 减少接口请求直接使用jwt
-        payload = {
-            "exp": int(time.time()) + 28 * 24 * 60 * 60,
-            "iat": int(time.time())
+    def parse_site_urls(self, site_urls: str) -> list[Dict]:
+        """
+        解析站点URLs
+        """
+        sites = []
+        for line in site_urls.strip().split('\n'):
+            if line:
+                name, url = line.split('|', 1)
+                sites.append({"name": name.strip(), "url": url.strip()})
+        return sites
+
+    def parse_site_cookies(self, site_cookies: str) -> list[Dict]:
+        """
+        解析站点Cookies
+        """
+        cookies = []
+        for line in site_cookies.strip().split('\n'):
+            if line:
+                name, cookie = line.split('|', 1)
+                cookies.append({"name": name.strip(), "cookie": cookie.strip()})
+        return cookies
+
+    def parse_sites_room(self, sites_room: str) -> list[Dict]:
+        """
+        解析站点聊天内容
+        """
+        rooms = []
+        for line in sites_room.strip().split('\n'):
+            if line:
+                parts = line.split('|')
+                name = parts[0].strip()
+                messages = [msg.strip() for msg in parts[1:]]
+                rooms.append({"name": name, "messages": messages})
+        return rooms
+
+    def merge_site_info(self, site_urls: list[Dict], site_cookies: list[Dict], sites_room: list[Dict]) -> Dict:
+        """
+        合并站点信息
+        """
+        merged_sites = {}
+        for site in site_urls:
+            name = site["name"]
+            url = site["url"]
+            parsed_url = urlparse(url)
+            domain = f"{parsed_url.scheme}://{parsed_url.netloc}/"  # 重新组合完整的 URL
+            merged_sites[name] = {
+                "enabled": self._enabled,
+                "url": url,
+                "cookie_env": "",
+                "referer": domain,  # 设置 referer 为完整的 URL
+                "messages": []
+            }
+
+        for cookie in site_cookies:
+            name = cookie["name"]
+            if name in merged_sites:
+                merged_sites[name]["cookie_env"] = cookie["cookie"]
+
+        for room in sites_room:
+            name = room["name"]
+            if name in merged_sites:
+                merged_sites[name]["messages"] = room["messages"]
+
+        return merged_sites
+
+    def send_message(self, site_config: Dict, message: str) -> bool:
+        """
+        通用的消息发送函数
+        """
+        if not site_config['enabled']:
+            logger.info(f"{site_config['url']} 未启用")
+            return False
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Cookie': os.getenv(site_config['cookie_env'], '').strip(),
+            'Referer': site_config['referer'],
         }
-        encoded_jwt = jwt.encode(payload, self._openToken, algorithm="HS256")
-        logger.debug(f"LuckyHelper get jwt---》{encoded_jwt}")
-        return "Bearer "+encoded_jwt
-
-    def __backup(self):
-        """
-        自动备份、删除备份
-        """
-        logger.info(f"当前时间 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} 开始备份")
-
-        # 备份保存路径
-        bk_path = Path(self._back_path) if self._back_path else self.get_data_path()
-
-        # 检查路径是否存在，如果不存在则创建
-        if not bk_path.exists():
-            try:
-                bk_path.mkdir(parents=True, exist_ok=True)
-                logger.info(f"创建备份路径: {bk_path}")
-            except Exception as e:
-                logger.error(f"创建备份路径失败: {str(e)}")
-                return False, f"创建备份路径失败: {str(e)}"
-
-        # 构造请求URL
-        backup_url = f"{self._host}/api/configure?openToken={self._openToken}"
+        params = {
+            'shbox_text': message,
+            'shout': '我喊',
+            'sent': 'yes',
+            'type': 'shoutbox'
+        }
 
         try:
-            # 发送GET请求获取ZIP文件
-            result = (RequestUtils(headers={"Authorization": self.get_jwt()})
-                    .get_res(backup_url))
-            
-            # 检查响应状态码
-            if result.status_code == 200:
-                # 获取响应内容（ZIP文件的二进制数据）
-                zip_data = result.content
-                
-                # 定义保存文件的路径，使用原始文件名
-                zip_file_name = result.headers.get('Content-Disposition', '').split('filename=')[-1].strip('"')
-                zip_file_path = bk_path / zip_file_name
-                
-                # 保存文件到本地
-                with open(zip_file_path, 'wb') as zip_file:
-                    zip_file.write(zip_data)
-                
-                success = True
-                msg = f"备份完成 备份文件 {zip_file_path}"
-                logger.info(msg)
+            response = RequestUtils(headers=headers).get_res(site_config['url'], params=params)
+            if response.status_code == 200:
+                logger.info(f"成功向 {site_config['url']} 发送消息: {message}")
+                return True  # 喊话成功
             else:
-                success = False
-                msg = f"创建备份失败，状态码: {result.status_code}, 原因: {result.json().get('msg', '未知错误')}"
-                logger.error(msg)
+                logger.error(f"向 {site_config['url']} 发送消息失败: {response.status_code} - {response.text}")
+                return False  # 喊话失败
         except Exception as e:
-            success = False
-            msg = f"创建备份失败，异常: {str(e)}"
-            logger.error(msg)
+            logger.error(f"发送消息到 {site_config['url']} 时发生错误: {e}")
+            return False  # 喊话失败
 
-        # 清理备份
-        bk_cnt = 0
-        del_cnt = 0
-        if self._cnt:
-            # 获取指定路径下所有以"lucky"开头的文件，按照创建时间从旧到新排序
-            files = sorted(glob.glob(f"{bk_path}/lucky**"), key=os.path.getctime)
-            bk_cnt = len(files)
-            # 计算需要删除的文件数
-            del_cnt = bk_cnt - int(self._cnt)
-            if del_cnt > 0:
-                logger.info(
-                    f"获取到 {bk_path} 路径下备份文件数量 {bk_cnt} 保留数量 {int(self._cnt)} 需要删除备份文件数量 {del_cnt}")
+    def main(self):
+        """
+        主函数，遍历所有站点并发送消息
+        """
+        # 存储所有站点的喊话结果
+        results = []
 
-                # 遍历并删除最旧的几个备份
-                for i in range(del_cnt):
-                    os.remove(files[i])
-                    logger.debug(f"删除备份文件 {files[i]} 成功")
-            else:
-                logger.info(
-                    f"获取到 {bk_path} 路径下备份文件数量 {bk_cnt} 保留数量 {int(self._cnt)} 无需删除")
+        # 遍历所有站点并发送消息
+        for site_name, site_config in self._merged_sites.items():
+            if not site_config['enabled']:
+                logger.info(f"{site_name} 未启用")
+                continue
+
+            logger.info(f"开始处理站点: {site_name}")
+            all_success = True  # 标记该站点是否所有消息都成功
+
+            for i, message in enumerate(site_config['messages']):
+                success = self.send_message(site_config, message)
+                if not success:
+                    all_success = False  # 如果有任何一条消息失败，标记为失败
+
+                if i < len(site_config['messages']) - 1:  # 不需要在最后一条消息之后等待
+                    logger.info(f"等待 {settings.GLOBAL_INTERVAL} 秒...")
+                    time.sleep(settings.GLOBAL_INTERVAL)
+
+            # 根据 all_success 决定站点的整体状态
+            status = "喊话成功" if all_success else "喊话失败"
+            results.append(f"{site_name} {status}")  # 格式化当前站点的结果
+
+        # 构建最终的消息内容
+        title = "---站点喊话---"
+        content = "\n".join(results)
 
         # 发送通知
         if self._notify:
@@ -183,13 +244,12 @@ class StationCall(_PluginBase):
                     f"清理备份数量: {del_cnt}\n"
                     f"剩余备份数量: {bk_cnt - del_cnt}\n"
                     f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
-)
-            
+            )
 
-        return success, msg
+        return success
 
     def get_state(self) -> bool:
-        return self._enabled
+        return self._enabled     
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
