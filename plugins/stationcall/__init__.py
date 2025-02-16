@@ -1,11 +1,6 @@
-import glob
-import os
 import time
 import jwt
 from datetime import datetime, timedelta
-from pathlib import Path
-
-import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -25,7 +20,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.5.5"
+    plugin_version = "0.5.6"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -39,15 +34,9 @@ class StationCall(_PluginBase):
 
     # 私有属性
     _enabled = False
-    _host = None
-    _openToken = None
-
-    # 任务执行间隔
     _cron = None
-    _cnt = None
-    _onlyonce = False
     _notify = False
-    _back_path = None
+    _sites = None
 
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
@@ -59,33 +48,15 @@ class StationCall(_PluginBase):
         if config:
             self._enabled = config.get("enabled")
             self._cron = config.get("cron")
-            self._cnt = config.get("cnt")
             self._notify = config.get("notify")
-            self._onlyonce = config.get("onlyonce")
-            self._back_path = config.get("back_path")
-            self._host = config.get("host")
-            self._openToken = config.get("openToken")
+            self._sites = config.get("sites")
 
             # 加载模块
-        if self._onlyonce:
+        if self._enabled:
             self._scheduler = BackgroundScheduler(timezone=settings.TZ)
-            logger.info(f"自动备份服务启动，立即运行一次")
-            self._scheduler.add_job(func=self.__backup, trigger='date',
-                                    run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                    name="自动备份")
-            # 关闭一次性开关
-            self._onlyonce = False
-            self.update_config({
-                "onlyonce": False,
-                "cron": self._cron,
-                "enabled": self._enabled,
-                "cnt": self._cnt,
-                "notify": self._notify,
-                "back_path": self._back_path,
-                "host": self._host,
-                "openToken": self._openToken,
-            })
-
+            logger.info(f"站点喊话服务启动，定时任务设置为 {self._cron}")
+            self._scheduler.add_job(func=self.__execute_requests, trigger=CronTrigger.from_crontab(self._cron),
+                                    name="站点喊话")
             # 启动任务
             if self._scheduler.get_jobs():
                 self._scheduler.print_jobs()
@@ -101,92 +72,54 @@ class StationCall(_PluginBase):
         logger.debug(f"LuckyHelper get jwt---》{encoded_jwt}")
         return "Bearer "+encoded_jwt
 
-    def __backup(self):
+    def __execute_requests(self):
         """
-        自动备份、删除备份
+        执行喊话请求的主函数
         """
-        logger.info(f"当前时间 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} 开始备份")
+        message = ''
 
-        # 备份保存路径
-        bk_path = Path(self._back_path) if self._back_path else self.get_data_path()
+        if not self._sites:
+            logger.info("没有配置站点信息，跳过发送消息")
+            return
 
-        # 检查路径是否存在，如果不存在则创建
-        if not bk_path.exists():
-            try:
-                bk_path.mkdir(parents=True, exist_ok=True)
-                logger.info(f"创建备份路径: {bk_path}")
-            except Exception as e:
-                logger.error(f"创建备份路径失败: {str(e)}")
-                return False, f"创建备份路径失败: {str(e)}"
+        for site_name, site_info in self._sites.items():
+            url = site_info.get("url")
+            cookie = site_info.get("cookie")
+            messages = site_info.get("messages", [])
 
-        # 构造请求URL
-        backup_url = f"{self._host}/api/configure?openToken={self._openToken}"
-
-        try:
-            # 发送GET请求获取ZIP文件
-            result = (RequestUtils(headers={"Authorization": self.get_jwt()})
-                    .get_res(backup_url))
-            
-            # 检查响应状态码
-            if result.status_code == 200:
-                # 获取响应内容（ZIP文件的二进制数据）
-                zip_data = result.content
-                
-                # 定义保存文件的路径，使用原始文件名
-                zip_file_name = result.headers.get('Content-Disposition', '').split('filename=')[-1].strip('"')
-                zip_file_path = bk_path / zip_file_name
-                
-                # 保存文件到本地
-                with open(zip_file_path, 'wb') as zip_file:
-                    zip_file.write(zip_data)
-                
-                success = True
-                msg = f"备份完成 备份文件 {zip_file_path}"
-                logger.info(msg)
-            else:
-                success = False
-                msg = f"创建备份失败，状态码: {result.status_code}, 原因: {result.json().get('msg', '未知错误')}"
-                logger.error(msg)
-        except Exception as e:
-            success = False
-            msg = f"创建备份失败，异常: {str(e)}"
-            logger.error(msg)
-
-        # 清理备份
-        bk_cnt = 0
-        del_cnt = 0
-        if self._cnt:
-            # 获取指定路径下所有以"lucky"开头的文件，按照创建时间从旧到新排序
-            files = sorted(glob.glob(f"{bk_path}/lucky**"), key=os.path.getctime)
-            bk_cnt = len(files)
-            # 计算需要删除的文件数
-            del_cnt = bk_cnt - int(self._cnt)
-            if del_cnt > 0:
-                logger.info(
-                    f"获取到 {bk_path} 路径下备份文件数量 {bk_cnt} 保留数量 {int(self._cnt)} 需要删除备份文件数量 {del_cnt}")
-
-                # 遍历并删除最旧的几个备份
-                for i in range(del_cnt):
-                    os.remove(files[i])
-                    logger.debug(f"删除备份文件 {files[i]} 成功")
-            else:
-                logger.info(
-                    f"获取到 {bk_path} 路径下备份文件数量 {bk_cnt} 保留数量 {int(self._cnt)} 无需删除")
+            for msg in messages:
+                response = self.fetch_with_delay(url, self.create_params(msg), cookie)
+                if response.status_code == 200:
+                    message += f"{site_name}box: {msg} 成功\n\n"
+                    logger.info(f"消息发送成功: {msg} 到 {url}")
+                else:
+                    message += f"{site_name}box: {msg} 失败\n\n"
+                    logger.error(f"消息发送失败: {msg} 到 {url}, 状态码: {response.status_code}")
 
         # 发送通知
         if self._notify:
             self.post_message(
                 mtype=NotificationType.SiteMessage,
-                title="【LuckyHelper备份完成】:",
-                text=f"备份{'成功' if success else '失败'}\n"
-                    f"获取到 {bk_path}\n路径下备份文件数量: {bk_cnt}\n"
-                    f"清理备份数量: {del_cnt}\n"
-                    f"剩余备份数量: {bk_cnt - del_cnt}\n"
-                    f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
-)
-            
+                title="【站点喊话完成】:",
+                text=message
+            )
 
-        return success, msg
+    def fetch_with_delay(self, url: str, params: str, cookie: str):
+        """
+        延迟发送请求
+        """
+        time.sleep(1)  # 延时 1 秒
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cookie': cookie
+        }
+        return RequestUtils(headers=headers).get_res(url + '?' + params)
+
+    def create_params(self, text: str) -> str:
+        """
+        创建请求参数
+        """
+        return "shbox_text=" + text + "&shout=我喊&sent=yes&type=shoutbox"
 
     def get_state(self) -> bool:
         return self._enabled
@@ -201,20 +134,20 @@ class StationCall(_PluginBase):
     def get_service(self) -> List[Dict[str, Any]]:
         """
         注册插件公共服务
-        [{
+        [({
             "id": "服务ID",
             "name": "服务名称",
             "trigger": "触发器：cron/interval/date/CronTrigger.from_crontab()",
             "func": self.xxx,
             "kwargs": {} # 定时器参数
-        }]
+        })]
         """
         if self._enabled and self._cron:
             return [{
                 "id": "StationCall",
                 "name": "站点喊话定时服务",
                 "trigger": CronTrigger.from_crontab(self._cron),
-                "func": self.__backup,
+                "func": self.__execute_requests,
                 "kwargs": {}
             }]
 
@@ -260,19 +193,25 @@ class StationCall(_PluginBase):
                                         }
                                     }
                                 ]
-                            },
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
                             {
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 4
                                 },
                                 'content': [
                                     {
-                                        'component': 'VSwitch',
+                                        'component': 'VTextarea',
                                         'props': {
-                                            'model': 'onlyonce',
-                                            'label': '立即运行一次',
+                                            'model': 'sites',
+                                            'label': '站点信息',
+                                            'rows': 10,
+                                            'placeholder': '配置站点信息，格式为JSON数组，例如：[{"name": "qingwa", "url": "https://www.***.com/shoutbox.php", "cookie": "", "messages": ["蛙总 求上传", "蛙总 求下载"]}]'
                                         }
                                     }
                                 ]
@@ -286,34 +225,17 @@ class StationCall(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 12
                                 },
                                 'content': [
                                     {
-                                        'component': 'VTextarea',
+                                        'component': 'VCronField',
                                         'props': {
-                                            'model': 'site_urls',
-                                            'label': '站点列表',
-                                            'rows': 5,
-                                            'placeholder': '每一行一个站点，配置方式见下方提示。'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextarea',
-                                        'props': {
-                                            'model': 'site_cookies',
-                                            'label': '站点Cookie',
-                                            'rows': 5,
-                                            'placeholder': '每一行一个Cookie，配置方式见下方提示。'
+                                            'model': 'cron',
+                                            'label': '执行周期',
+                                            'placeholder': '0 8 * * *',
+                                            'hint': '输入5位cron表达式，默认每天8点运行。',
+                                            'persistent-hint': True
                                         }
                                     }
                                 ]
@@ -326,81 +248,31 @@ class StationCall(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 12
+                                    'cols': 12,
                                 },
                                 'content': [
                                     {
-                                        'component': 'VTextarea',
+                                        'component': 'VAlert',
                                         'props': {
-                                            'model': 'site_room',
-                                            'label': '聊天内容',
-                                            'rows': 5,
-                                            'placeholder': '每一行一个内容，配置方式见下方提示。'
+                                            'type': 'info',
+                                            'variant': 'tonal',
+                                            'text': '站点列表: \n qingwa: \'https://www.***.com/shoutbox.php\'     \n'
+                                                    '站点Cookie: \n qingwa: \'cookie\'     \n'
+                                                    '多行使用,号连接。\n'
                                         }
                                     }
                                 ]
                             }
                         ]
-                    }
+                    },
                 ]
             },
-            {
-                'component': 'VRow',
-                'content': [
-                    {
-                        'component': 'VCol',
-                        'props': {
-                            'cols': 12,
-                            'md': 12
-                        },
-                        'content': [
-                            {
-                                'component': 'VCronField',
-                                'props': {
-                                    'model': 'cron',
-                                    'label': '执行周期',
-                                    'placeholder': '0 8 * * *',
-                                    'hint': '输入5位cron表达式，默认每天8点运行。',
-                                    'persistent-hint': True
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            {
-                'component': 'VRow',
-                'content': [
-                    {
-                        'component': 'VCol',
-                        'props': {
-                            'cols': 12,
-                        },
-                        'content': [
-                            {
-                                'component': 'VAlert',
-                                'props': {
-                                    'type': 'info',
-                                    'variant': 'tonal',
-                                    'text': '站点列表: \n qingwa: \'https://www.***.com/shoutbox.php\'     \n'
-                                            '站点Cookie: \n qingwa: \'cookie\'     \n'
-                                            '多行使用,号连接。\n'
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            ], {
-                "enabled": False,
-                "notify": False,
-                "onlyonce": False,
-                "cron": "0 8 * * *",
-                "cnt": 5,
-                "host": "",
-                "openToken": "",
-                "back_path": str(self.get_data_path())
-            }
+        ], {
+            "enabled": False,
+            "notify": False,
+            "cron": "0 8 * * *",
+            "sites": []
+        }
 
     def get_page(self) -> List[dict]:
         pass
