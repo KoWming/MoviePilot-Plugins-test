@@ -25,7 +25,7 @@ class StationCall(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
     # 插件版本
-    plugin_version = "0.5.4"
+    plugin_version = "0.5.5"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -286,7 +286,7 @@ class StationCall(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 4
+                                    'md': 6
                                 },
                                 'content': [
                                     {
@@ -304,7 +304,7 @@ class StationCall(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 4
+                                    'md': 6
                                 },
                                 'content': [
                                     {
