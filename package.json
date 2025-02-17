@@ -40,6 +40,19 @@
         "history": {
             "v0.1": "初始版本。"
         }
+    },
+    "SiteMessenger": {
+        "name": "站点喊话",
+        "description": "定时向多个站点发送预设消息。",
+        "labels": "站点",
+        "version": "1.0",
+        "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png",
+        "author": "KoWming",
+        "level": 2,
+        "v2": true,
+        "history": {
+            "v1.0": "初始版本。"
+        }
     }
 }
 
