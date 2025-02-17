@@ -17,7 +17,7 @@ class SiteMessenger(_PluginBase):
     plugin_name = "站点消息助手"
     plugin_desc = "定时向多个站点发送预设消息"
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
-    plugin_version = "1.3"
+    plugin_version = "1.4"
     plugin_author = "KoWming"
     author_url = "https://github.com/KoWming"
     plugin_config_prefix = "sitemessenger_"
