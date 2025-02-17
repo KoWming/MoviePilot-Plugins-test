@@ -17,7 +17,7 @@ class SiteMessenger(_PluginBase):
     plugin_name = "站点消息助手"
     plugin_desc = "定时向多个站点发送预设消息"
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
-    plugin_version = "1.5"
+    plugin_version = "1.6"
     plugin_author = "KoWming"
     author_url = "https://github.com/KoWming"
     plugin_config_prefix = "sitemessenger_"
@@ -149,179 +149,236 @@ class SiteMessenger(_PluginBase):
             }]
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
-        # 生成站点配置行
-        site_rows = []
-
-        for index, site in enumerate(self._sites):
-            site_rows.append({
-                'component': 'VRow',
-                'content': [
-                    {
-                        'component': 'VCol',
-                        'props': {'cols': 12, 'md': 6},
-                        'content': [
-                            {
-                                'component': 'VSwitch',
-                                'props': {'model': f'sites[{index}].enabled', 'label': '启用站点'}
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VCol',
-                        'props': {'cols': 12, 'md': 6},
-                        'content': [
-                            {
-                                'component': 'VTextField',
-                                'props': {'model': f'sites[{index}].name', 'label': '站点名称'}
-                            }
-                        ]
-                    }
-                ]
-            })
-            site_rows.append({
-                'component': 'VRow',
-                'content': [
-                    {
-                        'component': 'VCol',
-                        'props': {'cols': 12, 'md': 6},
-                        'content': [
-                            {
-                                'component': 'VTextField',
-                                'props': {'model': f'sites[{index}].url', 'label': 'URL'}
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VCol',
-                        'props': {'cols': 12, 'md': 6},
-                        'content': [
-                            {
-                                'component': 'VTextField',
-                                'props': {
-                                    'model': f'sites[{index}].cookie',
-                                    'label': 'Cookie',
-                                    'type': 'password'
+        # 生成站点配置区块
+        site_blocks = []
+        for index in range(len(self._sites)):
+            site_blocks.extend([
+                {
+                    'component': 'VRow',
+                    'content': [
+                        {
+                            'component': 'VCol',
+                            'props': {'cols': 12, 'md': 6},
+                            'content': [
+                                {
+                                    'component': 'VRow',
+                                    'content': [
+                                        {
+                                            'component': 'VCol',
+                                            'props': {'cols': 12},
+                                            'content': [
+                                                {
+                                                    'component': 'VSwitch',
+                                                    'props': {
+                                                        'model': f'sites[{index}].enabled',
+                                                        'label': '启用站点'
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
                                 }
-                            }
-                        ]
-                    }
-                ]
-            })
-            site_rows.append({
-                'component': 'VRow',
-                'content': [
-                    {
-                        'component': 'VCol',
-                        'props': {'cols': 12, 'md': 6},
-                        'content': [
-                            {
-                                'component': 'VTextField',
-                                'props': {'model': f'sites[{index}].referer', 'label': 'Referer'}
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VCol',
-                        'props': {'cols': 12, 'md': 6},
-                        'content': [
-                            {
-                                'component': 'VTextField',
-                                'props': {
-                                    'model': f'sites[{index}].messages',
-                                    'label': '消息内容',
-                                    'placeholder': '多个消息用 | 分隔'
+                            ]
+                        }
+                    ]
+                },
+                {
+                    'component': 'VRow',
+                    'content': [
+                        {
+                            'component': 'VCol',
+                            'props': {'cols': 12, 'md': 6},
+                            'content': [
+                                {
+                                    'component': 'VTextField',
+                                    'props': {
+                                        'model': f'sites[{index}].name',
+                                        'label': '站点名称',
+                                        'placeholder': '输入站点标识名称'
+                                    }
                                 }
-                            }
-                        ]
-                    }
-                ]
-            })
+                            ]
+                        },
+                        {
+                            'component': 'VCol',
+                            'props': {'cols': 12, 'md': 6},
+                            'content': [
+                                {
+                                    'component': 'VTextField',
+                                    'props': {
+                                        'model': f'sites[{index}].url',
+                                        'label': '请求地址',
+                                        'placeholder': 'https://example.com/shoutbox.php'
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    'component': 'VRow',
+                    'content': [
+                        {
+                            'component': 'VCol',
+                            'props': {'cols': 12, 'md': 6},
+                            'content': [
+                                {
+                                    'component': 'VTextField',
+                                    'props': {
+                                        'model': f'sites[{index}].cookie',
+                                        'label': 'Cookie值',
+                                        'type': 'password',
+                                        'placeholder': '输入登录Cookie'
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            'component': 'VCol',
+                            'props': {'cols': 12, 'md': 6},
+                            'content': [
+                                {
+                                    'component': 'VTextField',
+                                    'props': {
+                                        'model': f'sites[{index}].referer',
+                                        'label': 'Referer',
+                                        'placeholder': 'https://example.com/'
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    'component': 'VRow',
+                    'content': [
+                        {
+                            'component': 'VCol',
+                            'props': {'cols': 12},
+                            'content': [
+                                {
+                                    'component': 'VTextField',
+                                    'props': {
+                                        'model': f'sites[{index}].messages',
+                                        'label': '消息内容',
+                                        'placeholder': '多个消息用竖线|分隔',
+                                        'hint': '例：消息1|消息2|消息3'
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {'component': 'VDivider'}  # 站点之间的分隔线
+            ])
 
-        # 添加"新增站点"按钮行
-        # 由于无法使用动态按钮，这里不添加动态按钮，需要手动添加站点配置
-        # 可以考虑在配置文件中手动添加站点配置
+        # 添加"新增站点"区块
+        site_blocks.append({
+            'component': 'VRow',
+            'content': [
+                {
+                    'component': 'VCol',
+                    'props': {'cols': 12},
+                    'content': [
+                        {
+                            'component': 'VBtn',
+                            'props': {
+                                'variant': 'tonal',
+                                'block': True,
+                                'disabled': True,  # 禁用动态添加功能
+                                'title': '请保存当前配置后手动添加新站点'
+                            },
+                            'text': '（保存后手动添加新站点）'
+                        }
+                    ]
+                }
+            ]
+        })
 
         return [
             {
                 'component': 'VForm',
                 'content': [
+                    # 基础配置区块
                     {
-                        'component': 'VRow',
+                        'component': 'VWindow',
                         'content': [
                             {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 4},
+                                'component': 'VWindowItem',
                                 'content': [
                                     {
-                                        'component': 'VSwitch',
-                                        'props': {'model': 'enabled', 'label': '启用插件'}
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 4},
-                                'content': [
+                                        'component': 'VRow',
+                                        'content': [
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12, 'md': 4},
+                                                'content': [
+                                                    {
+                                                        'component': 'VSwitch',
+                                                        'props': {'model': 'enabled', 'label': '启用插件'}
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12, 'md': 4},
+                                                'content': [
+                                                    {
+                                                        'component': 'VSwitch',
+                                                        'props': {'model': 'notify', 'label': '开启通知'}
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12, 'md': 4},
+                                                'content': [
+                                                    {
+                                                        'component': 'VSwitch',
+                                                        'props': {'model': 'onlyonce', 'label': '立即运行一次'}
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
                                     {
-                                        'component': 'VSwitch',
-                                        'props': {'model': 'notify', 'label': '开启通知'}
-                                    }
+                                        'component': 'VRow',
+                                        'content': [
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12, 'md': 6},
+                                                'content': [
+                                                    {
+                                                        'component': 'VCronField',
+                                                        'props': {
+                                                            'model': 'cron',
+                                                            'label': '执行周期',
+                                                            'placeholder': '0 9 * * *',
+                                                            'hint': '设置定时任务执行时间'
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12, 'md': 6},
+                                                'content': [
+                                                    {
+                                                        'component': 'VTextField',
+                                                        'props': {
+                                                            'model': 'interval',
+                                                            'label': '发送间隔(秒)',
+                                                            'type': 'number',
+                                                            'hint': '消息之间的发送间隔时间'
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    # 插入站点配置区块
+                                    *site_blocks
                                 ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 4},
-                                'content': [
-                                    {
-                                        'component': 'VSwitch',
-                                        'props': {'model': 'onlyonce', 'label': '立即运行一次'}
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VCronField',
-                                        'props': {
-                                            'model': 'cron',
-                                            'label': '执行周期',
-                                            'placeholder': '0 9 * * *',
-                                            'hint': '设置定时任务执行时间'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'interval',
-                                            'label': '发送间隔(秒)',
-                                            'type': 'number',
-                                            'hint': '消息之间的发送间隔时间'
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12},
-                                'content': site_rows
                             }
                         ]
                     }
@@ -333,7 +390,7 @@ class SiteMessenger(_PluginBase):
             "interval": 5,
             "notify": True,
             "onlyonce": False,
-            "sites": [],
+            "sites": []
         }
 
     def get_page(self) -> List[dict]:
