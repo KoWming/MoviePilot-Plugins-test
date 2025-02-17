@@ -17,7 +17,7 @@ class SiteMessenger(_PluginBase):
     plugin_name = "站点消息助手"
     plugin_desc = "定时向多个站点发送预设消息"
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     plugin_author = "KoWming"
     author_url = "https://github.com/KoWming"
     plugin_config_prefix = "sitemessenger_"
@@ -149,6 +149,89 @@ class SiteMessenger(_PluginBase):
             }]
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
+        # 生成站点配置行
+        site_rows = []
+        for index in range(len(self._sites)):
+            site_rows.append({
+                'component': 'tr',
+                'content': [
+                    # 启用开关
+                    {
+                        'component': 'td',
+                        'content': [{
+                            'component': 'VSwitch',
+                            'props': {'model': f'sites[{index}].enabled'}
+                        }]
+                    },
+                    # 站点名称
+                    {
+                        'component': 'td',
+                        'content': [{
+                            'component': 'VTextField',
+                            'props': {'model': f'sites[{index}].name'}
+                        }]
+                    },
+                    # URL
+                    {
+                        'component': 'td',
+                        'content': [{
+                            'component': 'VTextField',
+                            'props': {'model': f'sites[{index}].url'}
+                        }]
+                    },
+                    # Cookie
+                    {
+                        'component': 'td',
+                        'content': [{
+                            'component': 'VTextField',
+                            'props': {
+                                'model': f'sites[{index}].cookie',
+                                'type': 'password'
+                            }
+                        }]
+                    },
+                    # Referer
+                    {
+                        'component': 'td',
+                        'content': [{
+                            'component': 'VTextField',
+                            'props': {'model': f'sites[{index}].referer'}
+                        }]
+                    },
+                    # 消息内容
+                    {
+                        'component': 'td',
+                        'content': [{
+                            'component': 'VTextField',
+                            'props': {
+                                'model': f'sites[{index}].messages',
+                                'placeholder': '多个消息用 | 分隔'
+                            }
+                        }]
+                    }
+                ]
+            })
+
+        # 添加"新增站点"按钮行
+        site_rows.append({
+            'component': 'tr',
+            'content': [
+                {
+                    'component': 'td',
+                    'props': {'colspan': 6},
+                    'content': [{
+                        'component': 'VBtn',
+                        'props': {
+                            'variant': 'tonal',
+                            'block': True,
+                            'onClick': 'addSite'
+                        },
+                        'text': '添加新站点'
+                    }]
+                }
+            ]
+        })
+
         return [
             {
                 'component': 'VForm',
@@ -250,28 +333,7 @@ class SiteMessenger(_PluginBase):
                                             },
                                             {
                                                 'component': 'tbody',
-                                                'content': [
-                                                    self.__get_site_row(i, site) for i, site in enumerate(self._sites)
-                                                ] + [
-                                                    {
-                                                        'component': 'tr',
-                                                        'content': [
-                                                            {'component': 'td', 'props': {'colspan': 6}},
-                                                            {
-                                                                'component': 'td',
-                                                                'content': [{
-                                                                    'component': 'VBtn',
-                                                                    'props': {
-                                                                        'variant': 'tonal',
-                                                                        'block': True,
-                                                                        'onClick': 'addSite'
-                                                                    },
-                                                                    'text': '添加站点'
-                                                                }]
-                                                            }
-                                                        ]
-                                                    }
-                                                ]
+                                                'content': site_rows
                                             }
                                         ]
                                     }
@@ -288,62 +350,6 @@ class SiteMessenger(_PluginBase):
             "notify": True,
             "onlyonce": False,
             "sites": []
-        }
-
-    def __get_site_row(self, index: int, site: dict):
-        """生成站点配置行"""
-        return {
-            'component': 'tr',
-            'content': [
-                {
-                    'component': 'td',
-                    'content': [{
-                        'component': 'VSwitch',
-                        'props': {'model': f'sites[{index}].enabled'}
-                    }]
-                },
-                {
-                    'component': 'td',
-                    'content': [{
-                        'component': 'VTextField',
-                        'props': {'model': f'sites[{index}].name'}
-                    }]
-                },
-                {
-                    'component': 'td',
-                    'content': [{
-                        'component': 'VTextField',
-                        'props': {'model': f'sites[{index}].url'}
-                    }]
-                },
-                {
-                    'component': 'td',
-                    'content': [{
-                        'component': 'VTextField',
-                        'props': {
-                            'model': f'sites[{index}].cookie',
-                            'type': 'password'
-                        }
-                    }]
-                },
-                {
-                    'component': 'td',
-                    'content': [{
-                        'component': 'VTextField',
-                        'props': {'model': f'sites[{index}].referer'}
-                    }]
-                },
-                {
-                    'component': 'td',
-                    'content': [{
-                        'component': 'VTextField',
-                        'props': {
-                            'model': f'sites[{index}].messages',
-                            'hint': '多个消息用竖线|分隔'
-                        }
-                    }]
-                }
-            ]
         }
 
     def get_page(self) -> List[dict]:
