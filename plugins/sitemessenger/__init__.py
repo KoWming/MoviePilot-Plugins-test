@@ -17,7 +17,7 @@ class SiteMessenger(_PluginBase):
     plugin_name = "站点消息助手"
     plugin_desc = "定时向多个站点发送预设消息"
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
-    plugin_version = "1.4"
+    plugin_version = "1.5"
     plugin_author = "KoWming"
     author_url = "https://github.com/KoWming"
     plugin_config_prefix = "sitemessenger_"
@@ -150,100 +150,87 @@ class SiteMessenger(_PluginBase):
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         # 生成站点配置行
-        site_tabs = []
-        site_windows = []
+        site_rows = []
 
         for index, site in enumerate(self._sites):
-            site_tabs.append({
-                'component': 'VTab',
-                'props': {'value': f'site-{index}'},
-                'text': f"站点 {index + 1}"
-            })
-
-            site_windows.append({
-                'component': 'VWindowItem',
-                'props': {'value': f'site-{index}'},
+            site_rows.append({
+                'component': 'VRow',
                 'content': [
                     {
-                        'component': 'VRow',
+                        'component': 'VCol',
+                        'props': {'cols': 12, 'md': 6},
                         'content': [
                             {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VSwitch',
-                                        'props': {'model': f'sites[{index}].enabled', 'label': '启用站点'}
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {'model': f'sites[{index}].name', 'label': '站点名称'}
-                                    }
-                                ]
+                                'component': 'VSwitch',
+                                'props': {'model': f'sites[{index}].enabled', 'label': '启用站点'}
                             }
                         ]
                     },
                     {
-                        'component': 'VRow',
+                        'component': 'VCol',
+                        'props': {'cols': 12, 'md': 6},
                         'content': [
                             {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {'model': f'sites[{index}].url', 'label': 'URL'}
-                                    }
-                                ]
-                            },
+                                'component': 'VTextField',
+                                'props': {'model': f'sites[{index}].name', 'label': '站点名称'}
+                            }
+                        ]
+                    }
+                ]
+            })
+            site_rows.append({
+                'component': 'VRow',
+                'content': [
+                    {
+                        'component': 'VCol',
+                        'props': {'cols': 12, 'md': 6},
+                        'content': [
                             {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': f'sites[{index}].cookie',
-                                            'label': 'Cookie',
-                                            'type': 'password'
-                                        }
-                                    }
-                                ]
+                                'component': 'VTextField',
+                                'props': {'model': f'sites[{index}].url', 'label': 'URL'}
                             }
                         ]
                     },
                     {
-                        'component': 'VRow',
+                        'component': 'VCol',
+                        'props': {'cols': 12, 'md': 6},
                         'content': [
                             {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {'model': f'sites[{index}].referer', 'label': 'Referer'}
-                                    }
-                                ]
-                            },
+                                'component': 'VTextField',
+                                'props': {
+                                    'model': f'sites[{index}].cookie',
+                                    'label': 'Cookie',
+                                    'type': 'password'
+                                }
+                            }
+                        ]
+                    }
+                ]
+            })
+            site_rows.append({
+                'component': 'VRow',
+                'content': [
+                    {
+                        'component': 'VCol',
+                        'props': {'cols': 12, 'md': 6},
+                        'content': [
                             {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': f'sites[{index}].messages',
-                                            'label': '消息内容',
-                                            'placeholder': '多个消息用 | 分隔'
-                                        }
-                                    }
-                                ]
+                                'component': 'VTextField',
+                                'props': {'model': f'sites[{index}].referer', 'label': 'Referer'}
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VCol',
+                        'props': {'cols': 12, 'md': 6},
+                        'content': [
+                            {
+                                'component': 'VTextField',
+                                'props': {
+                                    'model': f'sites[{index}].messages',
+                                    'label': '消息内容',
+                                    'placeholder': '多个消息用 | 分隔'
+                                }
                             }
                         ]
                     }
@@ -334,18 +321,7 @@ class SiteMessenger(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {'cols': 12},
-                                'content': [
-                                    {
-                                        'component': 'VTabs',
-                                        'props': {'v_model': 'active_tab'},
-                                        'content': site_tabs
-                                    },
-                                    {
-                                        'component': 'VWindow',
-                                        'props': {'v_model': 'active_tab'},
-                                        'content': site_windows
-                                    }
-                                ]
+                                'content': site_rows
                             }
                         ]
                     }
@@ -358,7 +334,6 @@ class SiteMessenger(_PluginBase):
             "notify": True,
             "onlyonce": False,
             "sites": [],
-            "active_tab": "site-0" if self._sites else None
         }
 
     def get_page(self) -> List[dict]:
