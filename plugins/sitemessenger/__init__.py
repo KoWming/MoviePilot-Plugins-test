@@ -17,7 +17,7 @@ class SiteMessenger(_PluginBase):
     plugin_name = "站点消息助手"
     plugin_desc = "定时向多个站点发送预设消息"
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png"
-    plugin_version = "1.0"
+    plugin_version = "1.1"
     plugin_author = "KoWming"
     author_url = "https://github.com/KoWming"
     plugin_config_prefix = "sitemessenger_"
@@ -130,6 +130,13 @@ class SiteMessenger(_PluginBase):
 
     def get_state(self) -> bool:
         return self._enabled
+    
+    @staticmethod
+    def get_command() -> List[Dict[str, Any]]:
+        pass
+
+    def get_api(self) -> List[Dict[str, Any]]:
+        pass
 
     def get_service(self) -> List[Dict[str, Any]]:
         if self._enabled and self._cron:
@@ -338,6 +345,9 @@ class SiteMessenger(_PluginBase):
                 }
             ]
         }
+
+    def get_page(self) -> List[dict]:
+        pass
 
     def stop_service(self):
         """停止服务"""
