@@ -67,12 +67,15 @@
         "name": "站点聊天室",
         "description": "自动向多个站点发送预设消息。",
         "labels": "站点",
-        "version": "1.2",
+        "version": "1.3",
         "icon": "signin.png",
         "author": "KoWming",
         "level": 2,
         "v2": true,
         "history": {
+            "v1.3": "修复站点统计信息问题",
+            "v1.2": "修复站点统计信息问题",
+            "v1.1": "修复站点统计信息问题",
             "v1.0": "初始版本。"
         }
     }
