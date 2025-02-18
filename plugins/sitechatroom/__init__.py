@@ -38,7 +38,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -382,8 +382,7 @@ class SiteChatRoom(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'queue_cnt',
-                                            'label': '执行间隔',
-                                            'placeholder': '多消息自动发送间隔时间（秒）'
+                                            'label': '队列数量'
                                         }
                                     }
                                 ]
@@ -471,30 +470,6 @@ class SiteChatRoom(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 12
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextarea',
-                                        'props': {
-                                            'model': 'site_meessage',
-                                            'label': '发送消息',
-                                            'rows': 10,
-                                            'placeholder': '每一行一个，格式如下：\n'
-                                                           '站点名称|消息内容1|消息内容2|消息内容3|...\n'
-                                        }
-                                    }
-                                ]
-                            },
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
                                 },
                                 'content': [
                                     {
@@ -546,7 +521,6 @@ class SiteChatRoom(_PluginBase):
             "queue_cnt": 5,
             "sign_sites": [],
             "login_sites": [],
-            "site_meessage": "",
             "retry_keyword": "错误|失败"
         }
 
