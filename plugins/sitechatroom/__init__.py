@@ -37,7 +37,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.4"
+    plugin_version = "1.5"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -355,7 +355,7 @@ class SiteChatRoom(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -372,7 +372,7 @@ class SiteChatRoom(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -389,24 +389,7 @@ class SiteChatRoom(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'retry_keyword',
-                                            'label': '重试关键词',
-                                            'placeholder': '支持正则表达式，命中才重签'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -433,7 +416,7 @@ class SiteChatRoom(_PluginBase):
                                             'chips': True,
                                             'multiple': True,
                                             'model': 'sign_sites',
-                                            'label': '签到站点',
+                                            'label': '选择站点',
                                             'items': site_options
                                         }
                                     }
@@ -501,9 +484,7 @@ class SiteChatRoom(_PluginBase):
             "clean": False,
             "queue_cnt": 5,
             "sign_sites": [],
-            "login_sites": [],
-            "site_meessage": "",
-            "retry_keyword": "错误|失败"
+            "site_meessage": ""
         }
 
     def __custom_sites(self) -> List[Any]:
