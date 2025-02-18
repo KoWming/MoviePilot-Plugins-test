@@ -38,7 +38,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.1"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -449,6 +449,26 @@ class SiteChatRoom(_PluginBase):
                         'content': [
                             {
                                 'component': 'VCol',
+                                'content': [
+                                    {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'chips': True,
+                                            'multiple': True,
+                                            'model': 'login_sites',
+                                            'label': '登录站点',
+                                            'items': site_options
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
                                 'props': {
                                     'cols': 12,
                                     'md': 12
@@ -526,6 +546,7 @@ class SiteChatRoom(_PluginBase):
             "queue_cnt": 5,
             "sign_sites": [],
             "login_sites": [],
+            "site_meessage": "",
             "retry_keyword": "错误|失败"
         }
 
