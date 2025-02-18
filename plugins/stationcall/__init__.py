@@ -17,7 +17,7 @@ from urllib.parse import urlparse, urlunparse
 
 class StationCall(_PluginBase):
     # 插件名称
-    plugin_name = "站点喊话"
+    plugin_name = "站点消息助手"
     # 插件描述
     plugin_desc = "特定站点喊话领取奖励。"
     # 插件图标

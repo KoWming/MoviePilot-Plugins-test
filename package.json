@@ -41,12 +41,12 @@
             "v0.1": "初始版本。"
         }
     },
-    "SiteMessenger": {
-        "name": "站点喊话",
-        "description": "定时向多个站点发送预设消息。",
+    "SiteChatRoom": {
+        "name": "站点聊天室",
+        "description": "自动向多个站点发送预设消息。",
         "labels": "站点",
-        "version": "1.7",
-        "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png",
+        "version": "1.0",
+        "icon": "signin.png",
         "author": "KoWming",
         "level": 2,
         "v2": true,
