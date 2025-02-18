@@ -16,7 +16,6 @@ from app.chain.site import SiteChain
 from app.core.config import settings
 from app.core.event import EventManager, eventmanager, Event
 from app.db.site_oper import SiteOper
-from app.db.sitestatistic_oper import SiteStatisticOper
 from app.helper.browser import PlaywrightHelper
 from app.helper.cloudflare import under_challenge
 from app.helper.module import ModuleHelper
@@ -54,7 +53,7 @@ class SiteChatRoom(_PluginBase):
     sites: SitesHelper = None
     siteoper: SiteOper = None
     sitechain: SiteChain = None
-    sitestatistic: SiteStatisticOper = None
+
     # 事件管理器
     event: EventManager = None
     # 定时器
@@ -81,7 +80,7 @@ class SiteChatRoom(_PluginBase):
         self.siteoper = SiteOper()
         self.event = EventManager()
         self.sitechain = SiteChain()
-        self.sitestatistic = SiteStatisticOper()
+
 
         # 停止现有任务
         self.stop_service()
