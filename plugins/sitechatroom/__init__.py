@@ -1,6 +1,5 @@
 import time
 import os
-import Base
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional
 
@@ -438,6 +437,9 @@ class SiteChatRoom(_PluginBase):
             # 过滤出所选站点信息
             selected_sites = {site_id: all_sites.get(site_id) for site_id in self._sign_sites if site_id in all_sites}
 
+            # 添加日志记录，输出获取到的站点信息
+            logger.info(f"获取到的站点信息: {selected_sites}")
+
             # 解析消息列表
             message_dict = {}
             for line in self._site_messages:
@@ -466,20 +468,14 @@ class SiteChatRoom(_PluginBase):
                     logger.warning(f"站点 {site.get('name')} 信息不完整，跳过发送消息")
                     continue
 
-                # 假设 rid 可以从 site 中获取，需要根据实际情况修改
-                id = site.get('id')
-                if not id:
-                    logger.warning(f"站点 {site.get('name')} 缺少 id 参数，跳过发送消息")
-                    continue
-
                 for message in messages:
-                    self._send_single_message(url, cookie, referer, user_agent, message, id)
+                    self._send_single_message(url, cookie, referer, user_agent, message)
                     time.sleep(self._interval_cnt)
         except Exception as e:
             logger.error(f"执行消息发送任务时出现异常: {e}")
 
 
-    def _send_single_message(self, url, cookie, referer, user_agent, message, rid):
+    def _send_single_message(self, url, cookie, referer, user_agent, message):
         headers = {
             'User-Agent': user_agent,
             'Cookie': cookie,
@@ -493,9 +489,7 @@ class SiteChatRoom(_PluginBase):
         }
 
         try:
-            # 假设 Base 是自定义类，需要传入 rid 参数
-            base_instance = Base()  # 初始化 Base 类的实例
-            response = base_instance.get(url, params=params, headers=headers, id=id)
+            response = response.get(url, params=params, headers=headers)
             if response.status_code == 200:
                 logger.info(f"成功向 {url} 发送消息: {message}")
             else:
