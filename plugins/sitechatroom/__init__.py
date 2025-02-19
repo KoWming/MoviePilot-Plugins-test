@@ -1,5 +1,6 @@
 import time
 import os
+import requests
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional
 
@@ -28,7 +29,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.2"
+    plugin_version = "2.3"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -481,7 +482,7 @@ class SiteChatRoom(_PluginBase):
             'Cookie': cookie,
             'Referer': referer,
         }
-        params = {
+        data = {
             'shbox_text': message,
             'shout': '我喊',
             'sent': 'yes',
@@ -489,7 +490,7 @@ class SiteChatRoom(_PluginBase):
         }
 
         try:
-            response = response.get(url, params=params, headers=headers)
+            response = requests.post(url, data=data, headers=headers)
             if response.status_code == 200:
                 logger.info(f"成功向 {url} 发送消息: {message}")
             else:
