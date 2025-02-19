@@ -1,32 +1,23 @@
-import re
 import time
-import traceback
+import os
+import requests
+import time
 from datetime import datetime, timedelta
-from multiprocessing.dummy import Pool as ThreadPool
-from multiprocessing.pool import ThreadPool
 from typing import Any, List, Dict, Tuple, Optional
-from urllib.parse import urljoin
 
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from ruamel.yaml import CommentedMap
 
-from app import schemas
 from app.chain.site import SiteChain
 from app.core.config import settings
-from app.core.event import EventManager, eventmanager, Event
+from app.core.event import EventManager, eventmanager
 from app.db.site_oper import SiteOper
-from app.helper.browser import PlaywrightHelper
-from app.helper.cloudflare import under_challenge
 from app.helper.module import ModuleHelper
 from app.helper.sites import SitesHelper
 from app.log import logger
 from app.plugins import _PluginBase
-from app.schemas.types import EventType, NotificationType
-from app.utils.http import RequestUtils
-from app.utils.site import SiteUtils
-from app.utils.string import StringUtils
+from app.schemas.types import EventType
 from app.utils.timer import TimerUtils
 
 
@@ -38,7 +29,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.7"
+    plugin_version = "1.8"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -66,14 +57,12 @@ class SiteChatRoom(_PluginBase):
     _cron: str = ""
     _onlyonce: bool = False
     _notify: bool = False
-    _send_cnt: int = 5    # 消息间隔
+    _interval_cnt: int = 5    # 消息间隔
     _sign_sites: list = []
     _site_messages: list = []  # 消息配置
     _clean: bool = False
     _start_time: int = None
     _end_time: int = None
-    _auto_cf: int = 0
-    _thread_num = 2
 
     def init_plugin(self, config: dict = None):
         self.sites = SitesHelper()
@@ -90,11 +79,9 @@ class SiteChatRoom(_PluginBase):
             self._cron = config.get("cron")
             self._onlyonce = config.get("onlyonce")
             self._notify = config.get("notify")
-            self._send_cnt = config.get("send_cnt") or 5
+            self._interval_cnt = config.get("interval_cnt") or 5
             self._sign_sites = config.get("sign_sites") or []
             self._site_messages = config.get("site_messages") or []
-            self._auto_cf = config.get("auto_cf")
-            self._clean = config.get("clean")
 
             # 过滤掉已删除的站点
             all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in
@@ -139,32 +126,18 @@ class SiteChatRoom(_PluginBase):
                 "notify": self._notify,
                 "cron": self._cron,
                 "onlyonce": self._onlyonce,
-                "send_cnt": self._send_cnt,
+                "interval_cnt": self._interval_cnt,
                 "sign_sites": self._sign_sites,
                 "site_messages": self._site_messages,
-                "auto_cf": self._auto_cf,
                 "clean": self._clean,
             }
         )
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
-        """
-        定义远程控制命令
-        :return: 命令关键字、事件、描述、附带数据
-        """
         pass
 
     def get_api(self) -> List[Dict[str, Any]]:
-        """
-        获取插件API
-        [{
-            "path": "/xx",
-            "endpoint": self.xxx,
-            "methods": ["GET", "POST"],
-            "summary": "API说明"
-        }]
-        """
         pass
 
     def get_service(self) -> List[Dict[str, Any]]:
@@ -270,7 +243,7 @@ class SiteChatRoom(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 3
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -286,7 +259,7 @@ class SiteChatRoom(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 3
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -302,7 +275,7 @@ class SiteChatRoom(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 3
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -346,7 +319,7 @@ class SiteChatRoom(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'send_cnt',
+                                            'model': 'interval_cnt',
                                             'label': '执行间隔',
                                             'placeholder': '多消息自动发送间隔时间（秒）'
                                         }
@@ -430,26 +403,11 @@ class SiteChatRoom(_PluginBase):
             "enabled": False,
             "notify": True,
             "cron": "",
-            "auto_cf": 0,
             "onlyonce": False,
-            "clean": False,
-            "send_cnt": 5,
+            "interval_cnt": 2,
             "sign_sites": [],
             "site_messages": []
         }
-
-    def __parse_messages(self):
-        """解析消息配置"""
-        site_messages = {}
-        for line in self._site_messages:
-            if not line.strip():
-                continue
-            parts = line.split("|")
-            if len(parts) >= 2:
-                site = parts[0].strip()
-                messages = [msg.strip() for msg in parts[1:] if msg.strip()]
-                site_messages[site] = messages
-        return site_messages
 
     def __custom_sites(self) -> List[Any]:
         custom_sites = []
@@ -464,91 +422,68 @@ class SiteChatRoom(_PluginBase):
         """
         pass
 
-    def send_messages(self, event: Event = None):
-        """核心消息发送逻辑"""
-        site_messages = self.__parse_messages()
-        all_sites = self.sites.get_indexers() + self.__custom_sites()
-        
-        # 过滤启用的站点
-        target_sites = [
-            site for site in all_sites 
-            if site.get("name") in site_messages
-            and site.get("id") in self._sign_sites
-        ]
+    def send_messages(self):
+        # 获取所有内置站点和自定义站点信息
+        all_sites = {site.id: site for site in self.siteoper.list_order_by_pri()}
+        custom_sites = self.__custom_sites()
+        for site in custom_sites:
+            all_sites[site.get("id")] = site
 
-        # 多线程发送
-        with ThreadPool(min(len(target_sites), self._thread_num)) as pool:
-            results = pool.map(self.__send_site_messages, target_sites)
+        # 过滤出所选站点信息
+        selected_sites = {site_id: all_sites.get(site_id) for site_id in self._sign_sites if site_id in all_sites}
 
-        # 处理结果
-        success = []
-        failed = []
-        for site_name, status in results:
-            if status:
-                success.append(site_name)
+        # 解析消息列表
+        message_dict = {}
+        for line in self._site_messages:
+            parts = line.strip().split("|")
+            if len(parts) > 1:
+                site_name = parts[0]
+                messages = parts[1:]
+                for site_id, site in selected_sites.items():
+                    if site.get("name") == site_name:
+                        message_dict[site_id] = messages
+
+        # 遍历所选站点，发送消息
+        for site_id, site in selected_sites.items():
+            base_url = site.get("url")
+            if base_url:
+                # 拼接 shoutbox.php
+                url = base_url.rstrip('/') + '/shoutbox.php'
             else:
-                failed.append(site_name)
+                url = None
+            cookie = os.getenv(site.get("cookie_env", ""), "").strip()
+            referer = site.get("referer", "")
+            messages = message_dict.get(site_id, [])
 
-        # 发送通知
-        if self._notify:
-            self.post_message(
-                title="【站点消息发送结果】",
-                text=f"成功站点：{len(success)}\n失败站点：{len(failed)}"
-            )
+            if not url or not cookie or not messages:
+                logger.warning(f"站点 {site.get('name')} 信息不完整，跳过发送消息")
+                continue
 
-    def __send_site_messages(self, site_info: CommentedMap) -> Tuple[str, bool]:
-        """单个站点消息发送"""
-        site_name = site_info.get("name")
-        messages = self.__parse_messages().get(site_name, [])
-        
-        try:
-            for msg in messages:
-                # 使用浏览器仿真发送
-                if site_info.get("render"):
-                    self.__send_with_browser(site_info, msg)
-                else:
-                    self.__send_with_requests(site_info, msg)
-                
-                # 间隔等待
-                time.sleep(self._send_cnt)
-                
-            return (site_name, True)
-        except Exception as e:
-            logger.error(f"{site_name} 消息发送失败：{str(e)}")
-            return (site_name, False)
+            for message in messages:
+                self._send_single_message(url, cookie, referer, message)
+                time.sleep(self._interval_cnt)
 
-    def __send_with_browser(self, site_info: CommentedMap, message: str):
-        """使用浏览器仿真发送"""
-        page_source = PlaywrightHelper().get_page_source(
-            url=site_info['url'],
-            cookies=site_info['cookie'],
-            ua=site_info.get('ua'),
-            proxies=settings.PROXY_SERVER if site_info.get("proxy") else None,
-            execute_js=f"""
-                document.querySelector('textarea[name="shbox_text"]').value = '{message}';
-                document.querySelector('input[type="submit"]').click();
-            """
-        )
-        return "发送成功" in page_source
-
-    def __send_with_requests(self, site_info: CommentedMap, message: str):
-        """直接请求发送"""
+    def _send_single_message(self, url, cookie, referer, message):
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Cookie': cookie,
+            'Referer': referer,
+        }
         params = {
             'shbox_text': message,
-            'shout': '发送',
+            'shout': '我喊',
+            'sent': 'yes',
             'type': 'shoutbox'
         }
-        
-        # 拼接完整的shoutbox接口地址
-        shoutbox_url = urljoin(site_info['url'], "shoutbox.php")
 
-        res = RequestUtils(
-            cookies=site_info['cookie'],
-            ua=site_info.get('ua'),
-            proxies=settings.PROXY if site_info.get("proxy") else None
-        ).get_res(url=shoutbox_url, params=params)
-        
-        return res and res.status_code == 200
+        try:
+            response = requests.get(url, params=params, headers=headers)
+            if response.status_code == 200:
+                logger.info(f"成功向 {url} 发送消息: {message}")
+            else:
+                logger.error(f"向 {url} 发送消息失败: {response.status_code} - {message}")
+        except Exception as e:
+            logger.error(f"发送消息时出错: {e}")
 
     def stop_service(self):
         """
@@ -568,27 +503,54 @@ class SiteChatRoom(_PluginBase):
         """
         删除对应站点选中
         """
-        site_id = event.event_data.get("site_id")
-        config = self.get_config()
-        if config:
+        try:
+            # 获取被删除站点的 ID
+            site_id = event.event_data.get("site_id")
+            if not site_id:
+                logger.error("未获取到被删除站点的 ID")
+                return
+
+            # 获取插件配置
+            config = self.get_config()
+            if not config:
+                logger.error("未获取到插件配置信息")
+                return
+
+            # 更新选中站点列表
             self._sign_sites = self.__remove_site_id(config.get("sign_sites") or [], site_id)
+
             # 保存配置
             self.__update_config()
+            logger.info(f"成功移除站点 ID 为 {site_id} 的选中状态，并保存配置")
+        except Exception as e:
+            logger.error(f"处理站点删除事件时出错: {e}")
+
 
     def __remove_site_id(self, do_sites, site_id):
-        if do_sites:
+        try:
+            # 处理 do_sites 为字符串的情况
             if isinstance(do_sites, str):
                 do_sites = [do_sites]
 
-            # 删除对应站点
+            # 检查 site_id 是否为空
             if site_id:
+                # 删除对应站点
                 do_sites = [site for site in do_sites if int(site) != int(site_id)]
+                logger.info(f"成功移除站点 ID 为 {site_id} 的站点")
             else:
                 # 清空
                 do_sites = []
+                logger.info("清空站点列表")
 
             # 若无站点，则停止
             if len(do_sites) == 0:
                 self._enabled = False
+                logger.info("站点列表为空，禁用该功能")
 
-        return do_sites
+            return do_sites
+        except ValueError as e:
+            logger.error(f"处理站点 ID 时出错：{e}")
+            return do_sites
+        except Exception as e:
+            logger.error(f"移除站点 ID 时出错：{e}")
+            return do_sites
