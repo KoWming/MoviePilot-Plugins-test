@@ -29,7 +29,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.0"
+    plugin_version = "2.1"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -466,13 +466,20 @@ class SiteChatRoom(_PluginBase):
                     logger.warning(f"站点 {site.get('name')} 信息不完整，跳过发送消息")
                     continue
 
+                # 假设 rid 可以从 site 中获取，需要根据实际情况修改
+                rid = site.get('rid')
+                if not rid:
+                    logger.warning(f"站点 {site.get('name')} 缺少 rid 参数，跳过发送消息")
+                    continue
+
                 for message in messages:
-                    self._send_single_message(url, cookie, referer, user_agent, message)
+                    self._send_single_message(url, cookie, referer, user_agent, message, rid)
                     time.sleep(self._interval_cnt)
         except Exception as e:
             logger.error(f"执行消息发送任务时出现异常: {e}")
 
-    def _send_single_message(self, url, cookie, referer, user_agent, message):
+
+    def _send_single_message(self, url, cookie, referer, user_agent, message, rid):
         headers = {
             'User-Agent': user_agent,
             'Cookie': cookie,
@@ -486,13 +493,15 @@ class SiteChatRoom(_PluginBase):
         }
 
         try:
-            response = requests.get(url, params=params, headers=headers)
+            # 假设 Base 是自定义类，需要传入 rid 参数
+            response = requests.get(url, params=params, headers=headers, rid=rid)
             if response.status_code == 200:
                 logger.info(f"成功向 {url} 发送消息: {message}")
             else:
                 logger.error(f"向 {url} 发送消息失败: {response.status_code} - {message}")
         except Exception as e:
             logger.error(f"发送消息时出错: {e}")
+
 
     def stop_service(self):
         """
