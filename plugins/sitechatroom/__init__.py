@@ -29,7 +29,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.8"
+    plugin_version = "1.9"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -114,6 +114,9 @@ class SiteChatRoom(_PluginBase):
                 if self._scheduler.get_jobs():
                     self._scheduler.print_jobs()
                     self._scheduler.start()
+                    # 检查调度器状态
+                    logger.info(f"调度器状态: {self._scheduler.running}")
+                    logger.info(f"调度器任务: {self._scheduler.get_jobs()}")
 
     def get_state(self) -> bool:
         return self._enabled
@@ -423,49 +426,55 @@ class SiteChatRoom(_PluginBase):
         pass
 
     def send_messages(self):
-        # 获取所有内置站点和自定义站点信息
-        all_sites = {site.id: site for site in self.siteoper.list_order_by_pri()}
-        custom_sites = self.__custom_sites()
-        for site in custom_sites:
-            all_sites[site.get("id")] = site
+        try:
+            logger.info(f"所选站点: {self._sign_sites}")
+            logger.info(f"消息配置: {self._site_messages}")
+            # 获取所有内置站点和自定义站点信息
+            all_sites = {site.id: site for site in self.siteoper.list_order_by_pri()}
+            custom_sites = self.__custom_sites()
+            for site in custom_sites:
+                all_sites[site.get("id")] = site
 
-        # 过滤出所选站点信息
-        selected_sites = {site_id: all_sites.get(site_id) for site_id in self._sign_sites if site_id in all_sites}
+            # 过滤出所选站点信息
+            selected_sites = {site_id: all_sites.get(site_id) for site_id in self._sign_sites if site_id in all_sites}
 
-        # 解析消息列表
-        message_dict = {}
-        for line in self._site_messages:
-            parts = line.strip().split("|")
-            if len(parts) > 1:
-                site_name = parts[0]
-                messages = parts[1:]
-                for site_id, site in selected_sites.items():
-                    if site.get("name") == site_name:
-                        message_dict[site_id] = messages
+            # 解析消息列表
+            message_dict = {}
+            for line in self._site_messages:
+                parts = line.strip().split("|")
+                if len(parts) > 1:
+                    site_name = parts[0]
+                    messages = parts[1:]
+                    for site_id, site in selected_sites.items():
+                        if site.get("name") == site_name:
+                            message_dict[site_id] = messages
 
-        # 遍历所选站点，发送消息
-        for site_id, site in selected_sites.items():
-            base_url = site.get("url")
-            if base_url:
-                # 拼接 shoutbox.php
-                url = base_url.rstrip('/') + '/shoutbox.php'
-            else:
-                url = None
-            cookie = os.getenv(site.get("cookie_env", ""), "").strip()
-            referer = site.get("referer", "")
-            messages = message_dict.get(site_id, [])
+            # 遍历所选站点，发送消息
+            for site_id, site in selected_sites.items():
+                base_url = site.get("url")
+                if base_url:
+                    # 拼接 shoutbox.php
+                    url = base_url.rstrip('/') + '/shoutbox.php'
+                else:
+                    url = None
+                cookie = os.getenv(site.get("cookie_env", ""), "").strip()
+                referer = site.get("referer", "")
+                user_agent = site.get("user_agent", 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
+                messages = message_dict.get(site_id, [])
 
-            if not url or not cookie or not messages:
-                logger.warning(f"站点 {site.get('name')} 信息不完整，跳过发送消息")
-                continue
+                if not url or not cookie or not messages:
+                    logger.warning(f"站点 {site.get('name')} 信息不完整，跳过发送消息")
+                    continue
 
-            for message in messages:
-                self._send_single_message(url, cookie, referer, message)
-                time.sleep(self._interval_cnt)
+                for message in messages:
+                    self._send_single_message(url, cookie, referer, user_agent, message)
+                    time.sleep(self._interval_cnt)
+        except Exception as e:
+            logger.error(f"执行消息发送任务时出现异常: {e}")
 
-    def _send_single_message(self, url, cookie, referer, message):
+    def _send_single_message(self, url, cookie, referer, user_agent, message):
         headers = {
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'User-Agent': user_agent,
             'Cookie': cookie,
             'Referer': referer,
         }
@@ -485,18 +494,18 @@ class SiteChatRoom(_PluginBase):
         except Exception as e:
             logger.error(f"发送消息时出错: {e}")
 
-    def stop_service(self):
-        """
-        退出插件
-        """
-        try:
-            if self._scheduler:
-                self._scheduler.remove_all_jobs()
-                if self._scheduler.running:
-                    self._scheduler.shutdown()
-                self._scheduler = None
-        except Exception as e:
-            logger.error("退出插件失败：%s" % str(e))
+        def stop_service(self):
+            """
+            退出插件
+            """
+            try:
+                if self._scheduler:
+                    self._scheduler.remove_all_jobs()
+                    if self._scheduler.running:
+                        self._scheduler.shutdown()
+                    self._scheduler = None
+            except Exception as e:
+                logger.error("退出插件失败：%s" % str(e))
 
     @eventmanager.register(EventType.SiteDeleted)
     def site_deleted(self, event):
