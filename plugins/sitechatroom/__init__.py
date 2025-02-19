@@ -29,7 +29,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.9"
+    plugin_version = "2.0"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -494,18 +494,18 @@ class SiteChatRoom(_PluginBase):
         except Exception as e:
             logger.error(f"发送消息时出错: {e}")
 
-        def stop_service(self):
-            """
-            退出插件
-            """
-            try:
-                if self._scheduler:
-                    self._scheduler.remove_all_jobs()
-                    if self._scheduler.running:
-                        self._scheduler.shutdown()
-                    self._scheduler = None
-            except Exception as e:
-                logger.error("退出插件失败：%s" % str(e))
+    def stop_service(self):
+        """
+        退出插件
+        """
+        try:
+            if self._scheduler:
+                self._scheduler.remove_all_jobs()
+                if self._scheduler.running:
+                    self._scheduler.shutdown()
+                self._scheduler = None
+        except Exception as e:
+            logger.error("退出插件失败：%s" % str(e))
 
     @eventmanager.register(EventType.SiteDeleted)
     def site_deleted(self, event):
