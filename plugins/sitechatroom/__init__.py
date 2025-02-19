@@ -38,7 +38,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.6"
+    plugin_version = "1.7"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -153,15 +153,7 @@ class SiteChatRoom(_PluginBase):
         定义远程控制命令
         :return: 命令关键字、事件、描述、附带数据
         """
-        return [{
-            "cmd": "/site_signin",
-            "event": EventType.PluginAction,
-            "desc": "站点聊天室",
-            "category": "站点",
-            "data": {
-                "action": "site_signin"
-            }
-        }]
+        pass
 
     def get_api(self) -> List[Dict[str, Any]]:
         """
@@ -173,13 +165,7 @@ class SiteChatRoom(_PluginBase):
             "summary": "API说明"
         }]
         """
-        return [{
-            "path": "/signin_by_domain",
-            "endpoint": self.signin_by_domain,
-            "methods": ["GET"],
-            "summary": "站点签到",
-            "description": "使用站点域名签到站点",
-        }]
+        pass
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
@@ -327,22 +313,6 @@ class SiteChatRoom(_PluginBase):
                                         }
                                     }
                                 ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 3
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'clean',
-                                            'label': '清理本日缓存',
-                                        }
-                                    }
-                                ]
                             }
                         ]
                     },
@@ -353,7 +323,7 @@ class SiteChatRoom(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 4
+                                    'md': 6
                                 },
                                 'content': [
                                     {
@@ -370,7 +340,7 @@ class SiteChatRoom(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 4
+                                    'md': 6
                                 },
                                 'content': [
                                     {
@@ -379,23 +349,6 @@ class SiteChatRoom(_PluginBase):
                                             'model': 'send_cnt',
                                             'label': '执行间隔',
                                             'placeholder': '多消息自动发送间隔时间（秒）'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 4
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'auto_cf',
-                                            'label': '自动优选',
-                                            'placeholder': '命中重试关键词次数（0-关闭）'
                                         }
                                     }
                                 ]
@@ -443,7 +396,7 @@ class SiteChatRoom(_PluginBase):
                                         }
                                     }
                                 ]
-                            },
+                            }
                         ]
                     },
                     {
@@ -509,101 +462,7 @@ class SiteChatRoom(_PluginBase):
         """
         拼装插件详情页面，需要返回页面配置，同时附带数据
         """
-        # 最近两天的日期数组
-        date_list = [(datetime.now() - timedelta(days=i)).date() for i in range(2)]
-        # 最近一天的签到数据
-        current_day = ""
-        sign_data = []
-        for day in date_list:
-            current_day = f"{day.month}月{day.day}日"
-            sign_data = self.get_data(current_day)
-            if sign_data:
-                break
-        if sign_data:
-            contents = [
-                {
-                    'component': 'tr',
-                    'props': {
-                        'class': 'text-sm'
-                    },
-                    'content': [
-                        {
-                            'component': 'td',
-                            'props': {
-                                'class': 'whitespace-nowrap break-keep text-high-emphasis'
-                            },
-                            'text': current_day
-                        },
-                        {
-                            'component': 'td',
-                            'text': data.get("site")
-                        },
-                        {
-                            'component': 'td',
-                            'text': data.get("status")
-                        }
-                    ]
-                } for data in sign_data
-            ]
-        else:
-            contents = [
-                {
-                    'component': 'tr',
-                    'props': {
-                        'class': 'text-sm'
-                    },
-                    'content': [
-                        {
-                            'component': 'td',
-                            'props': {
-                                'colspan': 3,
-                                'class': 'text-center'
-                            },
-                            'text': '暂无数据'
-                        }
-                    ]
-                }
-            ]
-        return [
-            {
-                'component': 'VTable',
-                'props': {
-                    'hover': True
-                },
-                'content': [
-                    {
-                        'component': 'thead',
-                        'content': [
-                            {
-                                'component': 'th',
-                                'props': {
-                                    'class': 'text-start ps-4'
-                                },
-                                'text': '日期'
-                            },
-                            {
-                                'component': 'th',
-                                'props': {
-                                    'class': 'text-start ps-4'
-                                },
-                                'text': '站点'
-                            },
-                            {
-                                'component': 'th',
-                                'props': {
-                                    'class': 'text-start ps-4'
-                                },
-                                'text': '状态'
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'tbody',
-                        'content': contents
-                    }
-                ]
-            }
-        ]
+        pass
 
     def send_messages(self, event: Event = None):
         """核心消息发送逻辑"""
