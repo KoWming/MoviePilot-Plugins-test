@@ -40,7 +40,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.8.7"
+    plugin_version = "2.8.8"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -114,7 +114,7 @@ class SiteChatRoom(_PluginBase):
                 # 定时服务
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info("站点聊天室消息发送服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.signin_by_domain, trigger='date',
+                self._scheduler.add_job(func=self.send_chat_messages, trigger='date',
                                         run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
                                         name="站点聊天室消息发送")
 
@@ -224,7 +224,7 @@ class SiteChatRoom(_PluginBase):
                     "id": f"SiteChatRoom|{trigger.hour}:{trigger.minute}",
                     "name": "站点聊天室消息发送服务",
                     "trigger": "cron",
-                    "func": self.signin_by_domain,
+                    "func": self.send_chat_messages,
                     "kwargs": {
                         "hour": trigger.hour,
                         "minute": trigger.minute
@@ -429,24 +429,7 @@ class SiteChatRoom(_PluginBase):
     def get_page(self) -> List[dict]:
         pass
 
-    def signin_by_domain(self, url: str) -> schemas.Response:
-        """
-        签到一个站点，可由API调用
-        """
-        domain = StringUtils.get_url_domain(url)
-        site_info = self.sites.get_indexer(domain)
-        if not site_info:
-            return schemas.Response(
-                success=True,
-                message=f"站点【{url}】不存在"
-            )
-        else:
-            return schemas.Response(
-                success=True,
-                message=self.send_chat_messages(site_info)
-            )
-
-    def send_chat_messages(self, event: Event = None):
+    def send_chat_messages(self, url: str, event: Event = None) -> schemas.Response:
         """向选定站点发送聊天消息（完整实现）"""
         try:
             logger.info("开始执行send_chat_messages函数")
@@ -476,7 +459,8 @@ class SiteChatRoom(_PluginBase):
                 for site_id in self._chat_sites:
                     str_site_id = str(site_id)
                     # 获取站点配置信息
-                    site_info = all_sites.get(str_site_id)
+                    domain = StringUtils.get_url_domain(url)
+                    site_info = self.sites.get_indexer(domain)
                     if not site_info:
                         logger.warn(f"站点 {site_id} 配置不存在，跳过处理")
                         continue
