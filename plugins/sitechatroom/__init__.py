@@ -1,23 +1,33 @@
+import re
 import time
-import os
-import requests
+import traceback
 from datetime import datetime, timedelta
+from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing.pool import ThreadPool
 from typing import Any, List, Dict, Tuple, Optional
+from urllib.parse import urljoin
 
+from requests import Response
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from ruamel.yaml import CommentedMap
 
-from requests import Response
+from app import schemas
 from app.chain.site import SiteChain
 from app.core.config import settings
-from app.core.event import EventManager, eventmanager
+from app.core.event import EventManager, eventmanager, Event
 from app.db.site_oper import SiteOper
+from app.helper.browser import PlaywrightHelper
+from app.helper.cloudflare import under_challenge
 from app.helper.module import ModuleHelper
 from app.helper.sites import SitesHelper
 from app.log import logger
 from app.plugins import _PluginBase
-from app.schemas.types import EventType
+from app.schemas.types import EventType, NotificationType
+from app.utils.http import RequestUtils
+from app.utils.site import SiteUtils
+from app.utils.string import StringUtils
 from app.utils.timer import TimerUtils
 
 
@@ -29,7 +39,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.3"
+    plugin_version = "2.4"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -79,7 +89,7 @@ class SiteChatRoom(_PluginBase):
             self._cron = config.get("cron")
             self._onlyonce = config.get("onlyonce")
             self._notify = config.get("notify")
-            self._interval_cnt = config.get("interval_cnt") or 5
+            self._interval_cnt = config.get("interval_cnt") or 2
             self._sign_sites = config.get("sign_sites") or []
             self._site_messages = config.get("site_messages") or []
 
@@ -420,84 +430,92 @@ class SiteChatRoom(_PluginBase):
         return custom_sites
 
     def get_page(self) -> List[dict]:
-        """
-        拼装插件详情页面，需要返回页面配置，同时附带数据
-        """
         pass
 
-    def send_messages(self):
+    def signin_by_domain(self, url: str) -> schemas.Response:
+
+        domain = StringUtils.get_url_domain(url)
+        site_info = self.sites.get_indexer(domain)
+        if not site_info:
+            return schemas.Response(
+                success=True,
+                message=f"站点【{url}】不存在"
+            )
+        else:
+            return schemas.Response(
+                success=True,
+                message=self.signin_site(site_info)
+            )
+
+    def send_messages(self,site_info: CommentedMap) -> Tuple[bool, str]:
+        """
+        通用签到处理
+        :param site_info: 站点信息
+        :return: 签到结果信息
+        """
+        if not site_info:
+            return False, ""
+        site = site_info.get("name")
+        site_url = site_info.get("url")
+        site_cookie = site_info.get("cookie")
+        ua = site_info.get("ua")
+        if not site_url or not site_cookie:
+            logger.warn(f"未配置 {site} 的站点地址或Cookie，无法签到")
+            return False, ""
+        
+        logger.info(f"所选站点: {self._sign_sites}")
+        logger.info(f"消息配置: {self._site_messages}")
+        
+        # 获取所有内置站点和自定义站点信息
+        all_sites = {site.id: site for site in self.siteoper.list_order_by_pri()}
+        custom_sites = self.__custom_sites()
+        for site in custom_sites:
+            all_sites[site.get("id")] = site
+        # 过滤出所选站点信息
+        selected_sites = {site_id: all_sites.get(site_id) for site_id in self._sign_sites if site_id in all_sites}
+        # 解析消息列表
+        message_dict = {}
+        for line in self._site_messages:
+            parts = line.strip().split("|")
+            if len(parts) > 1:
+                site_name = parts[0]
+                messages = parts[1:]
+                for site_id, site in selected_sites.items():
+                    if site.get("name") == site_name:
+                        message_dict[site_id] = messages
+        
         try:
-            logger.info(f"所选站点: {self._sign_sites}")
-            logger.info(f"消息配置: {self._site_messages}")
-            # 获取所有内置站点和自定义站点信息
-            all_sites = {site.id: site for site in self.siteoper.list_order_by_pri()}
-            custom_sites = self.__custom_sites()
-            for site in custom_sites:
-                all_sites[site.get("id")] = site
+            # 站点配置
+            sites_config = {
+                'name': {
+                    'enabled': True,
+                    'url': 'url/shoutbox.php',
+                    'cookie_env': 'cookie',
+                    'referer': 'url',
+                    'ua': 'ua',
+                    'messages': ['messages']
+                }
+            }
 
-            # 过滤出所选站点信息
-            selected_sites = {site_id: all_sites.get(site_id) for site_id in self._sign_sites if site_id in all_sites}
-
-            # 添加日志记录，输出获取到的站点信息
-            logger.info(f"获取到的站点信息: {selected_sites}")
-
-            # 解析消息列表
-            message_dict = {}
-            for line in self._site_messages:
-                parts = line.strip().split("|")
-                if len(parts) > 1:
-                    site_name = parts[0]
-                    messages = parts[1:]
-                    for site_id, site in selected_sites.items():
-                        if site.get("name") == site_name:
-                            message_dict[site_id] = messages
-
-            # 遍历所选站点，发送消息
-            for site_id, site in selected_sites.items():
-                base_url = site.get("url")
-                if base_url:
-                    # 拼接 shoutbox.php
-                    url = base_url.rstrip('/') + '/shoutbox.php'
-                else:
-                    url = None
-                cookie = os.getenv(site.get("cookie_env", ""), "").strip()
-                referer = site.get("referer", "")
-                user_agent = site.get("user_agent", 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
-                messages = message_dict.get(site_id, [])
-
-                if not url or not cookie or not messages:
-                    logger.warning(f"站点 {site.get('name')} 信息不完整，跳过发送消息")
+            for site_name, site_config in sites_config.items():
+                if not site_config['enabled']:
+                    logger.info(f"{site_config['url']} 未启用")
                     continue
 
-                for message in messages:
-                    self._send_single_message(url, cookie, referer, user_agent, message)
-                    time.sleep(self._interval_cnt)
+                logger.info(f"开始处理站点: {site_name}")
+                for i, message in enumerate(site_config['messages']):
+                    self._send_single_message(
+                        url=site_config['url'],
+                        cookie=os.getenv(site_config['cookie_env'], '').strip(),
+                        referer=site_config['referer'],
+                        user_agent=ua,
+                        message=message
+                    )
+                    if i < len(site_config['messages']) - 1:
+                        logger.info(f"等待 {self._interval_cnt} 秒...")
+                        time.sleep(self._interval_cnt)
         except Exception as e:
             logger.error(f"执行消息发送任务时出现异常: {e}")
-
-
-    def _send_single_message(self, url, cookie, referer, user_agent, message):
-        headers = {
-            'User-Agent': user_agent,
-            'Cookie': cookie,
-            'Referer': referer,
-        }
-        data = {
-            'shbox_text': message,
-            'shout': '我喊',
-            'sent': 'yes',
-            'type': 'shoutbox'
-        }
-
-        try:
-            response = requests.post(url, data=data, headers=headers)
-            if response.status_code == 200:
-                logger.info(f"成功向 {url} 发送消息: {message}")
-            else:
-                logger.error(f"向 {url} 发送消息失败: {response.status_code} - {message}")
-        except Exception as e:
-            logger.error(f"发送消息时出错: {e}")
-
 
     def stop_service(self):
         """

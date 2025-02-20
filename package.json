@@ -67,7 +67,7 @@
         "name": "站点聊天室",
         "description": "自动向多个站点发送预设消息。",
         "labels": "站点",
-        "version": "2.3",
+        "version": "2.4",
         "icon": "signin.png",
         "author": "KoWming",
         "level": 2,
