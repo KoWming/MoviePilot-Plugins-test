@@ -40,7 +40,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.8.3"
+    plugin_version = "2.8.4"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -472,7 +472,7 @@ class SiteChatRoom(_PluginBase):
                                     message_dict[site_id] = messages
 
                     # 获取消息列表
-                    messages = self._site_messages.get(str_site_id)
+                    messages = message_dict.get(str_site_id)
                     if not messages:
                         logger.info(f"站点 {site_info.get('name')} 没有需要发送的消息")
                         continue
