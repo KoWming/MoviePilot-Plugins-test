@@ -40,7 +40,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.8.8"
+    plugin_version = "2.8.9"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -429,7 +429,16 @@ class SiteChatRoom(_PluginBase):
     def get_page(self) -> List[dict]:
         pass
 
-    def send_chat_messages(self, url: str, event: Event = None) -> schemas.Response:
+    def get_site_config(self, url: str) -> schemas.Response:
+        """获取站点配置信息"""
+        domain = StringUtils.get_url_domain(url)
+        site_info = self.sites.get_indexer(domain)
+        if not site_info:
+            logger.warn(f"站点配置不存在，跳过处理")
+            return None
+        return site_info
+
+    def send_chat_messages(self, event: Event = None):
         """向选定站点发送聊天消息（完整实现）"""
         try:
             logger.info("开始执行send_chat_messages函数")
@@ -459,8 +468,7 @@ class SiteChatRoom(_PluginBase):
                 for site_id in self._chat_sites:
                     str_site_id = str(site_id)
                     # 获取站点配置信息
-                    domain = StringUtils.get_url_domain(url)
-                    site_info = self.sites.get_indexer(domain)
+                    site_info = all_sites.get(str_site_id)
                     if not site_info:
                         logger.warn(f"站点 {site_id} 配置不存在，跳过处理")
                         continue
