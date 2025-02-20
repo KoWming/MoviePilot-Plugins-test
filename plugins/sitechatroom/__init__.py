@@ -40,7 +40,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.8.4"
+    plugin_version = "2.8.5"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -91,11 +91,15 @@ class SiteChatRoom(_PluginBase):
             self._notify = config.get("notify")
             self._interval_cnt = config.get("interval_cnt") or 5
             self._chat_sites = config.get("chat_sites") or []
-            self._site_messages = config.get("site_messages") or {}
+            self._site_messages = config.get("site_messages") or []
+
+            # 确保 _site_messages 是一个字符串列表
+            if isinstance(self._site_messages, dict):
+                self._site_messages = [f"{site_id}|{'|'.join(messages)}" for site_id, messages in self._site_messages.items()]
 
             # 过滤掉已删除的站点
             all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in
-                                                                                   self.__custom_sites()]
+                                                                                self.__custom_sites()]
             self._chat_sites = [site_id for site_id in all_sites if site_id in self._chat_sites]
             # 保存配置
             self.__update_config()
