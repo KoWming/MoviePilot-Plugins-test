@@ -40,7 +40,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.8.2"
+    plugin_version = "2.8.3"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -458,7 +458,7 @@ class SiteChatRoom(_PluginBase):
                         continue
 
                     # 过滤出所选站点信息
-                    selected_sites = {site_id: all_sites.get(site_id) for site_id in self._sign_sites if site_id in all_sites}
+                    selected_sites = {site_id: all_sites.get(site_id) for site_id in self._chat_sites if site_id in all_sites}
 
                     # 解析消息列表
                     message_dict = {}
@@ -588,7 +588,7 @@ class SiteChatRoom(_PluginBase):
         site_id = event.event_data.get("site_id")
         config = self.get_config()
         if config:
-            self._sign_sites = self.__remove_site_id(config.get("sign_sites") or [], site_id)
+            self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
             # 保存配置
             self.__update_config()
 
