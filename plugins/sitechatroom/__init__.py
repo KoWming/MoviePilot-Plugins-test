@@ -423,7 +423,7 @@ class SiteChatRoom(_PluginBase):
         return custom_sites
 
     def get_page(self) -> List[dict]:
-        return []
+        pass
 
     def send_chat_messages(self, event: Event = None):
         """
