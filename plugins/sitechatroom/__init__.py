@@ -40,7 +40,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.5"
+    plugin_version = "2.6"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -426,81 +426,113 @@ class SiteChatRoom(_PluginBase):
         pass
 
     def send_chat_messages(self, event: Event = None):
-        """
-        向选定站点发送聊天消息
-        """
+        """向选定站点发送聊天消息（完整实现）"""
         if event:
             event_data = event.event_data
             if not event_data or event_data.get("action") != "send_chat_messages":
                 return
-
-        if event:
             logger.info("收到命令，开始向站点发送消息 ...")
             self.post_message(channel=event.event_data.get("channel"),
                               title="开始向站点发送消息 ...",
                               userid=event.event_data.get("user"))
 
         if self._chat_sites:
+            # 获取所有可用站点（内置+自定义）
+            all_sites = {
+                str(site.id): site
+                for site in self.siteoper.list_order_by_pri()
+            }
+            all_sites.update({
+                site.get("id"): site
+                for site in self.__custom_sites()
+            })
+
             for site_id in self._chat_sites:
-                messages = self._site_messages.get(str(site_id))
-                if messages:
-                    site_info = self.siteoper.get(site_id)
-                    if site_info:
-                        self.__send_messages_to_site(site_info, messages)
+                str_site_id = str(site_id)
+                # 获取站点配置信息
+                site_info = all_sites.get(str_site_id)
+                if not site_info:
+                    logger.warn(f"站点 {site_id} 配置不存在，跳过处理")
+                    continue
+                
+                # 获取消息列表
+                messages = self._site_messages.get(str_site_id)
+                if not messages:
+                    logger.info(f"站点 {site_info.get('name')} 没有需要发送的消息")
+                    continue
+                
+                # 执行消息发送
+                self.__send_messages_to_site(site_info, messages)
 
     def __send_messages_to_site(self, site_info: CommentedMap, messages: List[str]):
-        """
-        向单个站点发送多条消息
-        """
-        site = site_info.get("name")
+        """向单个站点发送消息完整实现"""
+        site_name = site_info.get("name")
         site_url = site_info.get("url")
         site_cookie = site_info.get("cookie")
-        ua = site_info.get("ua")
+        ua = site_info.get("ua") or settings.USER_AGENT
         render = site_info.get("render")
-        proxies = settings.PROXY if site_info.get("proxy") else None
-        proxy_server = settings.PROXY_SERVER if site_info.get("proxy") else None
-
-        if not site_url or not site_cookie:
-            logger.warn(f"未配置 {site} 的站点地址或Cookie，无法发送消息")
+        
+        if not all([site_url, site_cookie]):
+            logger.warn(f"站点 {site_name} 配置不完整，需要URL和Cookie")
             return
 
-        for message in messages:
+        success_count = 0
+        for index, message in enumerate(messages, 1):
             try:
+                # 渲染模式处理（Playwright）
                 if render:
-                    page = PlaywrightHelper().get_page(url=site_url,
-                                                       cookies=site_cookie,
-                                                       ua=ua,
-                                                       proxies=proxy_server)
-                    # 假设表单元素ID为 'chat_message' 和 'send_button'
-                    page.fill('#chat_message', message)
-                    page.click('#send_button')
-                    logger.info(f"向 {site} 发送消息：{message} 成功")
+                    with ThreadPool(processes=1) as pool:
+                        result = pool.apply_async(self._send_with_playwright,
+                                                (site_url, site_cookie, ua, message))
+                        result.get(timeout=120)
+                # 普通模式处理
                 else:
-                    message_url = urljoin(site_url, "/shoutbox.php")
-                    headers = {
-                        "User-Agent": ua,
-                        "Cookie": site_cookie
-                    }
-                    data = {
-                        "message": message
-                    }
-                    response = RequestUtils(headers=headers, proxies=proxies).post(url=message_url, data=data)
-                    if response and response.status_code == 200:
-                        logger.info(f"向 {site} 发送消息：{message} 成功")
-                    else:
-                        logger.error(f"向 {site} 发送消息：{message} 失败，状态码：{response.status_code if response else '无'}")
-
-                # 发送间隔
-                time.sleep(self._interval_cnt)
+                    self._send_with_requests(site_url, site_cookie, ua, message)
+                
+                success_count += 1
+                logger.info(f"[{site_name}] 第{index}条消息发送成功: {message}")
+                
+                # 执行间隔（最后一条不等待）
+                if index < len(messages):
+                    time.sleep(self._interval_cnt)
 
             except Exception as e:
-                logger.error(f"向 {site} 发送消息：{message} 时出现错误：{str(e)}")
+                logger.error(f"[{site_name}] 消息发送失败: {str(e)}")
+                traceback.print_exc()
 
+        # 发送通知
         if self._notify:
+            status = f"成功发送 {success_count}/{len(messages)} 条消息"
             self.post_message(channel=NotificationType.SiteChatRoom,
-                              title=f"向 {site} 发送消息完成",
-                              text="消息已全部发送")
+                            title=f"[{site_name}] 消息发送完成",
+                            text=status)
 
+    def _send_with_playwright(self, url: str, cookie: str, ua: str, message: str):
+        """Playwright实现发送逻辑"""
+        try:
+            with PlaywrightHelper() as helper:
+                page = helper.get_page(url=url, cookies=cookie, ua=ua)
+                page.fill('#iframe-shout-box', message)
+                page.click('#hbsubmit')
+                helper.sleep(5)
+        except Exception as e:
+            raise Exception(f"浏览器模式发送失败: {str(e)}")
+
+    def _send_with_requests(self, url: str, cookie: str, ua: str, message: str):
+        """Requests实现发送逻辑"""
+        message_url = urljoin(url, "/shoutbox.php")
+        headers = {"User-Agent": ua, "Cookie": cookie}
+        
+        try:
+            response = RequestUtils(headers=headers).post(
+                url=message_url,
+                data={"message": message},
+                timeout=60
+            )
+            if not response or response.status_code != 200:
+                raise Exception(f"HTTP状态码异常: {getattr(response, 'status_code', '无响应')}")
+        except Exception as e:
+            raise Exception(f"API模式发送失败: {str(e)}")
 
     def post_message(self, channel: NotificationType, title: str, text: str = None, userid: str = None):
         """
