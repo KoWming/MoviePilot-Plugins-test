@@ -40,7 +40,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.8.1"
+    plugin_version = "2.8.2"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -427,56 +427,61 @@ class SiteChatRoom(_PluginBase):
 
     def send_chat_messages(self, event: Event = None):
         """向选定站点发送聊天消息（完整实现）"""
-        if event:
-            event_data = event.event_data
-            if not event_data or event_data.get("action") != "send_chat_messages":
-                return
-            logger.info("收到命令，开始向站点发送消息 ...")
-            self.post_message(channel=event.event_data.get("channel"),
-                              title="开始向站点发送消息 ...",
-                              userid=event.event_data.get("user"))
+        try:
+            logger.info("开始执行send_chat_messages函数")
+            if event:
+                event_data = event.event_data
+                if not event_data or event_data.get("action") != "send_chat_messages":
+                    return
+                logger.info("收到命令，开始向站点发送消息 ...")
+                self.post_message(channel=event.event_data.get("channel"),
+                                title="开始向站点发送消息 ...",
+                                userid=event.event_data.get("user"))
 
-        if self._chat_sites:
-            # 获取所有可用站点（内置+自定义）
-            all_sites = {
-                str(site.id): site
-                for site in self.siteoper.list_order_by_pri()
-            }
-            all_sites.update({
-                site.get("id"): site
-                for site in self.__custom_sites()
-            })
+            if self._chat_sites:
+                # 获取所有可用站点（内置+自定义）
+                all_sites = {
+                    str(site.id): site
+                    for site in self.siteoper.list_order_by_pri()
+                }
+                all_sites.update({
+                    site.get("id"): site
+                    for site in self.__custom_sites()
+                })
 
-            for site_id in self._chat_sites:
-                str_site_id = str(site_id)
-                # 获取站点配置信息
-                site_info = all_sites.get(str_site_id)
-                if not site_info:
-                    logger.warn(f"站点 {site_id} 配置不存在，跳过处理")
-                    continue
+                for site_id in self._chat_sites:
+                    str_site_id = str(site_id)
+                    # 获取站点配置信息
+                    site_info = all_sites.get(str_site_id)
+                    if not site_info:
+                        logger.warn(f"站点 {site_id} 配置不存在，跳过处理")
+                        continue
 
-                # 过滤出所选站点信息
-                selected_sites = {site_id: all_sites.get(site_id) for site_id in self._sign_sites if site_id in all_sites}
+                    # 过滤出所选站点信息
+                    selected_sites = {site_id: all_sites.get(site_id) for site_id in self._sign_sites if site_id in all_sites}
 
-                # 解析消息列表
-                message_dict = {}
-                for line in self._site_messages:
-                    parts = line.strip().split("|")
-                    if len(parts) > 1:
-                        site_name = parts[0]
-                        messages = parts[1:]
-                        for site_id, site in selected_sites.items():
-                            if site.get("name") == site_name:
-                                message_dict[site_id] = messages
+                    # 解析消息列表
+                    message_dict = {}
+                    for line in self._site_messages:
+                        parts = line.strip().split("|")
+                        if len(parts) > 1:
+                            site_name = parts[0]
+                            messages = parts[1:]
+                            for site_id, site in selected_sites.items():
+                                if site.get("name") == site_name:
+                                    message_dict[site_id] = messages
 
-                # 获取消息列表
-                messages = self._site_messages.get(str_site_id)
-                if not messages:
-                    logger.info(f"站点 {site_info.get('name')} 没有需要发送的消息")
-                    continue
-                
-                # 执行消息发送
-                self.__send_messages_to_site(site_info, messages)
+                    # 获取消息列表
+                    messages = self._site_messages.get(str_site_id)
+                    if not messages:
+                        logger.info(f"站点 {site_info.get('name')} 没有需要发送的消息")
+                        continue
+                    
+                    # 执行消息发送
+                    self.__send_messages_to_site(site_info, messages)
+        except Exception as e:
+            logger.error(f"send_chat_messages函数执行失败: {str(e)}")
+            traceback.print_exc()
 
     def __send_messages_to_site(self, site_info: CommentedMap, messages: List[str]):
         """向单个站点发送消息完整实现"""
