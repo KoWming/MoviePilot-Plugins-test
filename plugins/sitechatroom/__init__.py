@@ -40,7 +40,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.6"
+    plugin_version = "2.7"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -437,6 +437,7 @@ class SiteChatRoom(_PluginBase):
                               userid=event.event_data.get("user"))
 
         if self._chat_sites:
+            logger.info(f"▷ 开始处理 {len(self._chat_sites)} 个站点的消息发送任务")
             # 获取所有可用站点（内置+自定义）
             all_sites = {
                 str(site.id): site
@@ -446,23 +447,27 @@ class SiteChatRoom(_PluginBase):
                 site.get("id"): site
                 for site in self.__custom_sites()
             })
+            logger.debug(f"可用站点列表：{list(all_sites.keys())}")
 
             for site_id in self._chat_sites:
                 str_site_id = str(site_id)
+                logger.info(f"▶ 开始处理站点 [{str_site_id}]")
                 # 获取站点配置信息
                 site_info = all_sites.get(str_site_id)
                 if not site_info:
-                    logger.warn(f"站点 {site_id} 配置不存在，跳过处理")
+                    logger.warn(f"✖ 站点 {str_site_id} 配置不存在，跳过处理")
                     continue
                 
                 # 获取消息列表
                 messages = self._site_messages.get(str_site_id)
                 if not messages:
-                    logger.info(f"站点 {site_info.get('name')} 没有需要发送的消息")
+                    logger.info(f"➤ 站点 {site_info.get('name')} 没有需要发送的消息")
                     continue
                 
+                logger.info(f"● 站点 [{site_info.get('name')}] 待发送消息数：{len(messages)} 条")
                 # 执行消息发送
                 self.__send_messages_to_site(site_info, messages)
+                logger.info(f"✓ 站点 [{site_info.get('name')}] 处理完成\n{'━'*30}")
 
     def __send_messages_to_site(self, site_info: CommentedMap, messages: List[str]):
         """向单个站点发送消息完整实现"""
@@ -473,66 +478,44 @@ class SiteChatRoom(_PluginBase):
         render = site_info.get("render")
         
         if not all([site_url, site_cookie]):
-            logger.warn(f"站点 {site_name} 配置不完整，需要URL和Cookie")
+            logger.warn(f"✖ 站点 {site_name} 配置不完整，需要URL和Cookie")
             return
+
+        logger.info(f"→ 开始向 [{site_name}] 发送消息（总消息数：{len(messages)} 条，间隔：{self._interval_cnt}秒）")
 
         success_count = 0
         for index, message in enumerate(messages, 1):
             try:
+                logger.debug(f"▸ 正在发送第 {index}/{len(messages)} 条消息：{StringUtils.trim(message, 50)}")
                 # 渲染模式处理（Playwright）
                 if render:
+                    logger.debug("使用浏览器渲染模式发送消息")
                     with ThreadPool(processes=1) as pool:
                         result = pool.apply_async(self._send_with_playwright,
                                                 (site_url, site_cookie, ua, message))
                         result.get(timeout=120)
-                # 普通模式处理
                 else:
+                    logger.debug("使用API模式发送消息")
                     self._send_with_requests(site_url, site_cookie, ua, message)
                 
                 success_count += 1
-                logger.info(f"[{site_name}] 第{index}条消息发送成功: {message}")
+                logger.info(f"✓ [{site_name}] 第{index}条消息发送成功")
                 
                 # 执行间隔（最后一条不等待）
                 if index < len(messages):
+                    logger.debug(f"等待 {self._interval_cnt} 秒后继续...")
                     time.sleep(self._interval_cnt)
 
             except Exception as e:
-                logger.error(f"[{site_name}] 消息发送失败: {str(e)}")
+                logger.error(f"✖ [{site_name}] 第 {index} 条消息发送失败，错误详情：{str(e)}")
                 traceback.print_exc()
 
         # 发送通知
         if self._notify:
-            status = f"成功发送 {success_count}/{len(messages)} 条消息"
+            logger.info(f"✔ 站点 [{site_name}] 消息发送完成，成功率：{success_count}/{len(messages)}")
             self.post_message(channel=NotificationType.SiteChatRoom,
                             title=f"[{site_name}] 消息发送完成",
-                            text=status)
-
-    def _send_with_playwright(self, url: str, cookie: str, ua: str, message: str):
-        """Playwright实现发送逻辑"""
-        try:
-            with PlaywrightHelper() as helper:
-                page = helper.get_page(url=url, cookies=cookie, ua=ua)
-                page.fill('#iframe-shout-box', message)
-                page.click('#hbsubmit')
-                helper.sleep(5)
-        except Exception as e:
-            raise Exception(f"浏览器模式发送失败: {str(e)}")
-
-    def _send_with_requests(self, url: str, cookie: str, ua: str, message: str):
-        """Requests实现发送逻辑"""
-        message_url = urljoin(url, "/shoutbox.php")
-        headers = {"User-Agent": ua, "Cookie": cookie}
-        
-        try:
-            response = RequestUtils(headers=headers).post(
-                url=message_url,
-                data={"message": message},
-                timeout=60
-            )
-            if not response or response.status_code != 200:
-                raise Exception(f"HTTP状态码异常: {getattr(response, 'status_code', '无响应')}")
-        except Exception as e:
-            raise Exception(f"API模式发送失败: {str(e)}")
+                            text=f"成功发送 {success_count}/{len(messages)} 条消息")
 
     def post_message(self, channel: NotificationType, title: str, text: str = None, userid: str = None):
         """
