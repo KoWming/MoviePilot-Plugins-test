@@ -40,7 +40,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.8.5"
+    plugin_version = "2.8.6"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -453,6 +453,9 @@ class SiteChatRoom(_PluginBase):
                     for site in self.__custom_sites()
                 })
 
+                logger.debug(f"all_sites 类型: {type(all_sites)}")
+                logger.debug(f"all_sites 内容: {all_sites}")
+
                 for site_id in self._chat_sites:
                     str_site_id = str(site_id)
                     # 获取站点配置信息
@@ -461,9 +464,6 @@ class SiteChatRoom(_PluginBase):
                         logger.warn(f"站点 {site_id} 配置不存在，跳过处理")
                         continue
 
-                    # 过滤出所选站点信息
-                    selected_sites = {site_id: all_sites.get(site_id) for site_id in self._chat_sites if site_id in all_sites}
-
                     # 解析消息列表
                     message_dict = {}
                     for line in self._site_messages:
@@ -471,7 +471,7 @@ class SiteChatRoom(_PluginBase):
                         if len(parts) > 1:
                             site_name = parts[0]
                             messages = parts[1:]
-                            for site_id, site in selected_sites.items():
+                            for site_id, site in all_sites.items():
                                 if site.get("name") == site_name:
                                     message_dict[site_id] = messages
 
