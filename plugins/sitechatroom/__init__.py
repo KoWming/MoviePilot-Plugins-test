@@ -434,14 +434,6 @@ class SiteChatRoom(_PluginBase):
             if not event_data or event_data.get("action") != "send_chat_messages":
                 return
 
-        # 日期
-        today = datetime.today()
-        if self._start_time and self._end_time:
-            if int(datetime.today().hour) < self._start_time or int(datetime.today().hour) > self._end_time:
-                logger.error(
-                    f"当前时间 {int(datetime.today().hour)} 不在 {self._start_time}-{self._end_time} 范围内，暂不执行任务")
-                return
-
         if event:
             logger.info("收到命令，开始向站点发送消息 ...")
             self.post_message(channel=event.event_data.get("channel"),
