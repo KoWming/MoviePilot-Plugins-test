@@ -365,7 +365,7 @@ class SiteChatRoom(_PluginBase):
                                     {
                                         'component': 'VTextarea',
                                         'props': {
-                                            'model': 'site_messages',
+                                            'model': 'sites_messages',
                                             'label': '发送消息',
                                             'rows': 10,
                                             'placeholder': '每行格式：站点名称|消息内容1|消息内容2|...'
@@ -408,7 +408,7 @@ class SiteChatRoom(_PluginBase):
             "onlyonce": False,
             "interval_cnt": 2,
             "chat_sites": [],
-            "site_messages": ""
+            "sites_messages": ""
         }
 
     def __custom_sites(self) -> List[Any]:
