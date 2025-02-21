@@ -1,4 +1,5 @@
 import re
+import time
 import traceback
 from datetime import datetime, timedelta
 from multiprocessing.dummy import Pool as ThreadPool
@@ -37,7 +38,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.0.5"
+    plugin_version = "1.0.6"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -90,8 +91,7 @@ class SiteChatRoom(_PluginBase):
 
 
             # 过滤掉已删除的站点
-            all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in
-                                                                                   self.__custom_sites()]
+            all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in self.__custom_sites()]
             self._chat_sites = [site_id for site_id in all_sites if site_id in self._chat_sites]
 
             # 保存配置
@@ -471,16 +471,27 @@ class SiteChatRoom(_PluginBase):
 
         # 执行发送消息
         logger.info("开始执行发送消息任务 ...")
-        with ThreadPool(min(len(do_sites), int(self._interval_cnt))) as p:
-            p.starmap(self.send_msg_to_site, [(site, site_msgs.get(site.get("name"), [])) for site in do_sites])
+        for site in do_sites:
+            site_name = site.get("name")
+            logger.info(f"开始处理站点: {site_name}")
+            messages = site_msgs.get(site_name, [])
+            for i, message in enumerate(messages):
+                self.send_msg_to_site(site, message)
+                if i < len(messages) - 1:
+                    logger.info(f"等待 {self._interval_cnt} 秒...")
+                    time.sleep(self._interval_cnt)
+
         # 保存配置
         self.__update_config()
 
-    def send_msg_to_site(self, site_info: CommentedMap, messages: List[str]):
+
+
+    def send_msg_to_site(self, site_info: CommentedMap, message: str):
         """
         向一个站点发送消息
         """
         logger.info(f"进入 send_msg_to_site 函数，准备向 {site_info.get('name')} 发送消息")
+        site_name = site_info.get("name")
         site_url = site_info.get("url")
         site_cookie = site_info.get("cookie")
         ua = site_info.get("ua")
@@ -490,25 +501,29 @@ class SiteChatRoom(_PluginBase):
             logger.warn(f"未配置 {site_info.get('name')} 的站点地址或Cookie，无法继续")
             return
 
-        for message in messages:
-            try:
-                # 这里需要根据实际站点的消息发送接口进行修改
-                # 示例：假设消息发送接口为 /send_message，POST请求，需要传递 message 参数
-                send_url = urljoin(site_url, "/send_message")
-                data = {
-                    "message": message
-                }
-                res = RequestUtils(cookies=site_cookie,
-                                   ua=ua,
-                                   proxies=proxies
-                                   ).post_res(url=send_url, data=data)
-                if res and res.status_code == 200:
-                    logger.info(f"向 {site_info.get('name')} 发送消息 '{message}' 成功")
-                else:
-                    logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{res.status_code if res else '无响应'}")
-            except Exception as e:
-                logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败：{str(e)}")
-            time.sleep(self._interval_cnt)
+        try:
+            send_url = urljoin(site_url, "/shoutbox.php")
+            headers = {
+                'User-Agent': ua,
+                'Cookie': site_cookie,
+                'Referer': site_url
+            }
+            params = {
+                'shbox_text': message,
+                'shout': '我喊',
+                'sent': 'yes',
+                'type': 'shoutbox'
+            }
+            res = RequestUtils(cookies=site_cookie,
+                               ua=ua,
+                               proxies=proxies
+                               ).get_res(url=send_url, params=params, headers=headers)
+            if res and res.status_code == 200:
+                logger.info(f"向 {site_info.get('name')} 发送消息 '{message}' 成功")
+            else:
+                logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{res.status_code if res else '无响应'}")
+        except Exception as e:
+            logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败：{str(e)}")
 
     def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
         """
@@ -518,13 +533,19 @@ class SiteChatRoom(_PluginBase):
         """
         result = {}
         lines = site_messages.strip().split('\n')
+        # 获取所有选中的站点名称
+        all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
+        selected_site_names = [site.get("name") for site in all_sites if site.get("id") in self._chat_sites]
+
         for line in lines:
             parts = line.split('|')
             if len(parts) > 1:
                 site_name = parts[0].strip()
-                messages = [msg.strip() for msg in parts[1:]]
-                result[site_name] = messages
+                if site_name in selected_site_names:
+                    messages = [msg.strip() for msg in parts[1:]]
+                    result[site_name] = messages
         return result
+
 
 
     def stop_service(self):
