@@ -682,10 +682,16 @@ class SiteChatRoom(_PluginBase):
         if not site_info:
             return False, ""
         site = site_info.get("name")
+        logger.info(f"获取到站点名称: {site}")
         site_url = site_info.get("url")
+        logger.info(f"获取到站点URL: {site_url}")
         site_cookie = site_info.get("cookie")
+        logger.info(f"获取到站点Cookie: {site_cookie}")
         ua = site_info.get("ua")
+        logger.info(f"获取到站点User-Agent: {ua}")
         render = site_info.get("render")
+        logger.info(f"获取到站点渲染配置: {render}")
+
         proxies = settings.PROXY if site_info.get("proxy") else None
         proxy_server = settings.PROXY_SERVER if site_info.get("proxy") else None
         if not site_url or not site_cookie:
