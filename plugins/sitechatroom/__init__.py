@@ -367,7 +367,7 @@ class SiteChatRoom(_PluginBase):
                                             'model': 'site_messages',
                                             'label': '发送消息',
                                             'rows': 10,
-                                            'placeholder': '每行格式：站点ID|消息内容1|消息内容2|...'
+                                            'placeholder': '每行格式：站点名称|消息内容1|消息内容2|...'
                                         }
                                     }
                                 ]
@@ -444,8 +444,6 @@ class SiteChatRoom(_PluginBase):
 
         if self._sign_sites:
             self.__do(today=today, type_str="签到", do_sites=self._sign_sites, event=event)
-        if self._login_sites:
-            self.__do(today=today, type_str="登录", do_sites=self._login_sites, event=event)
 
     def __do(self, today: datetime, type_str: str, do_sites: list, event: Event = None):
         """
@@ -751,95 +749,6 @@ class SiteChatRoom(_PluginBase):
             logger.warn("%s 签到失败：%s" % (site, str(e)))
             traceback.print_exc()
             return False, f"签到失败：{str(e)}！"
-
-    def login_site(self, site_info: CommentedMap) -> Tuple[str, str]:
-        """
-        模拟登录一个站点
-        """
-        site_module = self.__build_class(site_info.get("url"))
-        # 开始记时
-        start_time = datetime.now()
-        if site_module and hasattr(site_module, "login"):
-            try:
-                state, message = site_module().login(site_info)
-            except Exception as e:
-                traceback.print_exc()
-                state, message = False, f"模拟登录失败：{str(e)}"
-        else:
-            state, message = self.__login_base(site_info)
-        # 统计
-        seconds = (datetime.now() - start_time).seconds
-        domain = StringUtils.get_url_domain(site_info.get('url'))
-        if state:
-            self.sitestatistic.success(domain=domain, seconds=seconds)
-        else:
-            self.sitestatistic.fail(domain)
-        return site_info.get("name"), message
-
-    @staticmethod
-    def __login_base(site_info: CommentedMap) -> Tuple[bool, str]:
-        """
-        模拟登录通用处理
-        :param site_info: 站点信息
-        :return: 签到结果信息
-        """
-        if not site_info:
-            return False, ""
-        site = site_info.get("name")
-        site_url = site_info.get("url")
-        site_cookie = site_info.get("cookie")
-        ua = site_info.get("ua")
-        render = site_info.get("render")
-        proxies = settings.PROXY if site_info.get("proxy") else None
-        proxy_server = settings.PROXY_SERVER if site_info.get("proxy") else None
-        if not site_url or not site_cookie:
-            logger.warn(f"未配置 {site} 的站点地址或Cookie，无法签到")
-            return False, ""
-        # 模拟登录
-        try:
-            # 访问链接
-            site_url = str(site_url).replace("attendance.php", "")
-            logger.info(f"开始站点模拟登录：{site}，地址：{site_url}...")
-            if render:
-                page_source = PlaywrightHelper().get_page_source(url=site_url,
-                                                                 cookies=site_cookie,
-                                                                 ua=ua,
-                                                                 proxies=proxy_server)
-                if not SiteUtils.is_logged_in(page_source):
-                    if under_challenge(page_source):
-                        return False, f"无法通过Cloudflare！"
-                    return False, f"仿真登录失败，Cookie已失效！"
-                else:
-                    return True, "模拟登录成功"
-            else:
-                res = RequestUtils(cookies=site_cookie,
-                                   ua=ua,
-                                   proxies=proxies
-                                   ).get_res(url=site_url)
-                # 判断登录状态
-                if res and res.status_code in [200, 500, 403]:
-                    if not SiteUtils.is_logged_in(res.text):
-                        if under_challenge(res.text):
-                            msg = "站点被Cloudflare防护，请打开站点浏览器仿真"
-                        elif res.status_code == 200:
-                            msg = "Cookie已失效"
-                        else:
-                            msg = f"状态码：{res.status_code}"
-                        logger.warn(f"{site} 模拟登录失败，{msg}")
-                        return False, f"模拟登录失败，{msg}！"
-                    else:
-                        logger.info(f"{site} 模拟登录成功")
-                        return True, f"模拟登录成功"
-                elif res is not None:
-                    logger.warn(f"{site} 模拟登录失败，状态码：{res.status_code}")
-                    return False, f"模拟登录失败，状态码：{res.status_code}！"
-                else:
-                    logger.warn(f"{site} 模拟登录失败，无法打开网站")
-                    return False, f"模拟登录失败，无法打开网站！"
-        except Exception as e:
-            logger.warn("%s 模拟登录失败：%s" % (site, str(e)))
-            traceback.print_exc()
-            return False, f"模拟登录失败：{str(e)}！"
 
     def stop_service(self):
         """
