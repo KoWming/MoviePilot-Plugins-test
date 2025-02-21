@@ -37,7 +37,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.0.1"
+    plugin_version = "1.0.2"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -588,13 +588,13 @@ class SiteChatRoom(_PluginBase):
 
             if not self._retry_keyword:
                 # 没设置重试关键词则重试已选站点
-                retry_sites = self._sign_sites if type_str == "签到" else self._login_sites
+                retry_sites = self._chat_sites if type_str == "签到" else self._login_sites
             logger.debug(f"下次{type_str}重试站点 {retry_sites}")
 
             # 存入历史
             self.save_data(key=type_str + "-" + today,
                            value={
-                               "do": self._sign_sites if type_str == "签到" else self._login_sites,
+                               "do": self._chat_sites if type_str == "签到" else self._login_sites,
                                "retry": retry_sites
                            })
 
@@ -614,7 +614,7 @@ class SiteChatRoom(_PluginBase):
                 signin_message = "\n".join([f'【{s[0]}】{s[1]}' for s in signin_message if s])
                 self.post_message(title=f"【站点自动{type_str}】",
                                   mtype=NotificationType.SiteMessage,
-                                  text=f"全部{type_str}数量: {len(self._sign_sites if type_str == '签到' else self._login_sites)} \n"
+                                  text=f"全部{type_str}数量: {len(self._chat_sites if type_str == '签到' else self._login_sites)} \n"
                                        f"本次{type_str}数量: {len(do_sites)} \n"
                                        f"下次{type_str}数量: {len(retry_sites) if self._retry_keyword else 0} \n"
                                        f"{signin_message}"
@@ -795,7 +795,7 @@ class SiteChatRoom(_PluginBase):
         site_id = event.event_data.get("site_id")
         config = self.get_config()
         if config:
-            self._sign_sites = self.__remove_site_id(config.get("sign_sites") or [], site_id)
+            self._chat_sites = self.__remove_site_id(config.get("sign_sites") or [], site_id)
             self._login_sites = self.__remove_site_id(config.get("login_sites") or [], site_id)
             # 保存配置
             self.__update_config()
