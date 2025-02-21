@@ -681,16 +681,23 @@ class SiteChatRoom(_PluginBase):
         """
         if not site_info:
             return False, ""
-        site = site_info.get("name")
-        logger.info(f"获取到站点名称: {site}")
-        site_url = site_info.get("url")
-        logger.info(f"获取到站点URL: {site_url}")
-        site_cookie = site_info.get("cookie")
-        logger.info(f"获取到站点Cookie: {site_cookie}")
-        ua = site_info.get("ua")
-        logger.info(f"获取到站点User-Agent: {ua}")
-        render = site_info.get("render")
-        logger.info(f"获取到站点渲染配置: {render}")
+        try:
+            if site_info is None:
+                logger.error("site_info 为 None，无法获取站点信息")
+            else:
+                site = site_info.get("name")
+                logger.info(f"获取到站点名称: {site}")
+                site_url = site_info.get("url")
+                logger.info(f"获取到站点URL: {site_url}")
+                site_cookie = site_info.get("cookie")
+                logger.info(f"获取到站点Cookie: {site_cookie}")
+                ua = site_info.get("ua")
+                logger.info(f"获取到站点User-Agent: {ua}")
+                render = site_info.get("render")
+                logger.info(f"获取到站点渲染配置: {render}")
+        except Exception as e:
+            logger.error(f"获取站点信息时发生异常: {e}")
+
 
         proxies = settings.PROXY if site_info.get("proxy") else None
         proxy_server = settings.PROXY_SERVER if site_info.get("proxy") else None
