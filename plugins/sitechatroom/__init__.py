@@ -37,7 +37,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.0.2"
+    plugin_version = "1.0.3"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -549,14 +549,6 @@ class SiteChatRoom(_PluginBase):
         # 保存配置
         self.__update_config()
 
-    def __build_class(self, url) -> Any:
-        for site_schema in self._site_schema:
-            try:
-                if site_schema.match(url):
-                    return site_schema
-            except Exception as e:
-                logger.error("站点模块加载失败：%s" % str(e))
-        return None
 
     def signin_by_domain(self, url: str) -> schemas.Response:
         """
