@@ -480,7 +480,7 @@ class SiteChatRoom(_PluginBase):
 
             # 今日未签|登录站点
             no_sites = [site for site in do_sites if
-                        site.get("id") not in already_sites or site.get("id") in retry_sites]
+                        site.get("id") not in already_sites or site.get("id")]
 
             if not no_sites:
                 logger.info(f"今日 {today} 已{type_str}，无重新{type_str}站点，本次任务结束")
@@ -497,10 +497,10 @@ class SiteChatRoom(_PluginBase):
         # 执行签到
         logger.info(f"开始执行{type_str}任务 ...")
         if type_str == "签到":
-            with ThreadPool(min(len(do_sites), int(self._queue_cnt))) as p:
+            with ThreadPool(min(len(do_sites), int(self._interval_cnt))) as p:
                 status = p.map(self.signin_site, do_sites)
         else:
-            with ThreadPool(min(len(do_sites), int(self._queue_cnt))) as p:
+            with ThreadPool(min(len(do_sites), int(self._interval_cnt))) as p:
                 status = p.map(self.login_site, do_sites)
 
         if status:
@@ -521,23 +521,6 @@ class SiteChatRoom(_PluginBase):
                     "site": s[0],
                     "status": s[1]
                 } for s in status]
-            # 保存数据
-            self.save_data(key, today_data)
-
-            # 命中重试词的站点id
-            retry_sites = []
-            # 命中重试词的站点签到msg
-            retry_msg = []
-            # 登录成功
-            login_success_msg = []
-            # 签到成功
-            sign_success_msg = []
-            # 已签到
-            already_sign_msg = []
-            # 仿真签到成功
-            fz_sign_msg = []
-            # 失败｜错误
-            failed_msg = []
 
             sites = {site.get('name'): site.get("id") for site in self.sites.get_indexers() if not site.get("public")}
             for s in status:
@@ -554,62 +537,7 @@ class SiteChatRoom(_PluginBase):
                                                      "site_id": site_id,
                                                      "action": "site_refresh"
                                                  })
-                # 记录本次命中重试关键词的站点
-                if self._retry_keyword:
-                    if site_id:
-                        match = re.search(self._retry_keyword, s[1])
-                        if match:
-                            logger.debug(f"站点 {site_name} 命中重试关键词 {self._retry_keyword}")
-                            retry_sites.append(site_id)
-                            # 命中的站点
-                            retry_msg.append(s)
-                            continue
 
-                if "登录成功" in str(s):
-                    login_success_msg.append(s)
-                elif "仿真签到成功" in str(s):
-                    fz_sign_msg.append(s)
-                    continue
-                elif "签到成功" in str(s):
-                    sign_success_msg.append(s)
-                elif '已签到' in str(s):
-                    already_sign_msg.append(s)
-                else:
-                    failed_msg.append(s)
-
-            if not self._retry_keyword:
-                # 没设置重试关键词则重试已选站点
-                retry_sites = self._chat_sites if type_str == "签到" else self._login_sites
-            logger.debug(f"下次{type_str}重试站点 {retry_sites}")
-
-            # 存入历史
-            self.save_data(key=type_str + "-" + today,
-                           value={
-                               "do": self._chat_sites if type_str == "签到" else self._login_sites,
-                               "retry": retry_sites
-                           })
-
-            # 自动Cloudflare IP优选
-            if self._auto_cf and int(self._auto_cf) > 0 and retry_msg and len(retry_msg) >= int(self._auto_cf):
-                self.eventmanager.send_event(EventType.PluginAction, {
-                    "action": "cloudflare_speedtest"
-                })
-
-            # 发送通知
-            if self._notify:
-                # 签到详细信息 登录成功、签到成功、已签到、仿真签到成功、失败--命中重试
-                signin_message = login_success_msg + sign_success_msg + already_sign_msg + fz_sign_msg + failed_msg
-                if len(retry_msg) > 0:
-                    signin_message += retry_msg
-
-                signin_message = "\n".join([f'【{s[0]}】{s[1]}' for s in signin_message if s])
-                self.post_message(title=f"【站点自动{type_str}】",
-                                  mtype=NotificationType.SiteMessage,
-                                  text=f"全部{type_str}数量: {len(self._chat_sites if type_str == '签到' else self._login_sites)} \n"
-                                       f"本次{type_str}数量: {len(do_sites)} \n"
-                                       f"下次{type_str}数量: {len(retry_sites) if self._retry_keyword else 0} \n"
-                                       f"{signin_message}"
-                                  )
             if event:
                 self.post_message(channel=event.event_data.get("channel"),
                                   title=f"站点{type_str}完成！", userid=event.event_data.get("user"))
