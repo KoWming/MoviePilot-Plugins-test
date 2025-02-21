@@ -1,5 +1,6 @@
 import re
 import time
+import requests
 import traceback
 from datetime import datetime, timedelta
 from multiprocessing.dummy import Pool as ThreadPool
@@ -38,7 +39,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.0.8"
+    plugin_version = "2.0.0"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -452,7 +453,7 @@ class SiteChatRoom(_PluginBase):
         except Exception as e:
             logger.error(f"send_site_messages 函数执行失败: {str(e)}")
 
-    def __send_msgs(self, today: datetime, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
+    def __send_msgs(self,  do_sites: list, site_msgs: Dict[str, List[str]]):
         """
         发送消息逻辑
         """
@@ -495,7 +496,6 @@ class SiteChatRoom(_PluginBase):
         向一个站点发送消息
         """
         logger.info(f"进入 send_msg_to_site 函数，准备向 {site_info.get('name')} 发送消息")
-        site_name = site_info.get("name")
         site_url = site_info.get("url")
         site_cookie = site_info.get("cookie")
         ua = site_info.get("ua")
@@ -519,15 +519,12 @@ class SiteChatRoom(_PluginBase):
                 'type': 'shoutbox'
             }
             try:
-                res = RequestUtils(cookies=site_cookie,
-                                   ua=ua,
-                                   proxies=proxies
-                                   ).get_res(url=send_url, params=params, headers=headers)
+                response = requests.get(send_url, params=params, headers=headers, proxies=proxies)
             except Exception as req_err:
                 logger.warn(f"发送请求失败：{str(req_err)}")
                 return
 
-            if res and res.status_code == 200:
+            if response and response.status_code == 200:
                 logger.info(f"向 {site_info.get('name')} 发送消息 '{message}' 成功")
             else:
                 logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{res.status_code if res else '无响应'}")
@@ -541,11 +538,13 @@ class SiteChatRoom(_PluginBase):
         :param site_messages: 多行文本输入
         :return: 字典，键为站点名称，值为该站点的消息
         """
+        logger.info("开始解析输入的站点消息")
         result = {}
         lines = site_messages.strip().split('\n')
         # 获取所有选中的站点名称
         all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
         selected_site_names = [site.get("name") for site in all_sites if site.get("id") in self._chat_sites]
+        logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
 
         for line in lines:
             parts = line.split('|')
@@ -554,9 +553,9 @@ class SiteChatRoom(_PluginBase):
                 if site_name in selected_site_names:
                     messages = [msg.strip() for msg in parts[1:]]
                     result[site_name] = messages
+                    logger.info(f"成功解析站点 {site_name} 的消息: {messages}")
+        logger.info(f"站点消息解析完成，解析结果: {result}")
         return result
-
-
 
     def stop_service(self):
         """
