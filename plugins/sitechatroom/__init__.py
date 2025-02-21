@@ -39,7 +39,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.0.0"
+    plugin_version = "2.0.1"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -540,22 +540,29 @@ class SiteChatRoom(_PluginBase):
         """
         logger.info("开始解析输入的站点消息")
         result = {}
-        lines = site_messages.strip().split('\n')
-        # 获取所有选中的站点名称
-        all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
-        selected_site_names = [site.get("name") for site in all_sites if site.get("id") in self._chat_sites]
-        logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
+        try:
+            lines = site_messages.strip().split('\n')
+            # 获取所有选中的站点名称
+            all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
+            selected_site_names = [site.get("name") for site in all_sites if site.get("id") in self._chat_sites]
+            logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
 
-        for line in lines:
-            parts = line.split('|')
-            if len(parts) > 1:
-                site_name = parts[0].strip()
-                if site_name in selected_site_names:
-                    messages = [msg.strip() for msg in parts[1:]]
-                    result[site_name] = messages
-                    logger.info(f"成功解析站点 {site_name} 的消息: {messages}")
+            for line in lines:
+                logger.debug(f"正在解析行: {line}")
+                parts = line.split('|')
+                if len(parts) > 1:
+                    site_name = parts[0].strip()
+                    logger.debug(f"解析出的站点名称: {site_name}")
+                    if site_name in selected_site_names:
+                        messages = [msg.strip() for msg in parts[1:]]
+                        result[site_name] = messages
+                        logger.info(f"成功解析站点 {site_name} 的消息: {messages}")
+        except Exception as e:
+            logger.error(f"解析站点消息时出现异常: {str(e)}")
         logger.info(f"站点消息解析完成，解析结果: {result}")
         return result
+
+
 
     def stop_service(self):
         """
