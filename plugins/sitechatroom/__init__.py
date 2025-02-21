@@ -407,7 +407,7 @@ class SiteChatRoom(_PluginBase):
             "onlyonce": False,
             "interval_cnt": 2,
             "chat_sites": [],
-            "site_messages": {}
+            "site_messages": []
         }
 
     def __custom_sites(self) -> List[Any]:
@@ -474,56 +474,8 @@ class SiteChatRoom(_PluginBase):
         if type_str == "签到":
             with ThreadPool(min(len(do_sites), int(self._interval_cnt))) as p:
                 status = p.map(self.signin_site, do_sites)
-        else:
-            with ThreadPool(min(len(do_sites), int(self._interval_cnt))) as p:
-                status = p.map(self.login_site, do_sites)
-
-        if status:
-            logger.info(f"站点{type_str}任务完成！")
-            # 获取今天的日期
-            key = f"{datetime.now().month}月{datetime.now().day}日"
-            today_data = self.get_data(key)
-            if today_data:
-                if not isinstance(today_data, list):
-                    today_data = [today_data]
-                for s in status:
-                    today_data.append({
-                        "site": s[0],
-                        "status": s[1]
-                    })
-            else:
-                today_data = [{
-                    "site": s[0],
-                    "status": s[1]
-                } for s in status]
-
-            sites = {site.get('name'): site.get("id") for site in self.sites.get_indexers() if not site.get("public")}
-            for s in status:
-                site_name = s[0]
-                site_id = None
-                if site_name:
-                    site_id = sites.get(site_name)
-
-                if 'Cookie已失效' in str(s) and site_id:
-                    # 触发自动登录插件登录
-                    logger.info(f"触发站点 {site_name} 自动登录更新Cookie和Ua")
-                    self.eventmanager.send_event(EventType.PluginAction,
-                                                 {
-                                                     "site_id": site_id,
-                                                     "action": "site_refresh"
-                                                 })
-
-            if event:
-                self.post_message(channel=event.event_data.get("channel"),
-                                  title=f"站点{type_str}完成！", userid=event.event_data.get("user"))
-        else:
-            logger.error(f"站点{type_str}任务失败！")
-            if event:
-                self.post_message(channel=event.event_data.get("channel"),
-                                  title=f"站点{type_str}任务失败！", userid=event.event_data.get("user"))
         # 保存配置
         self.__update_config()
-
 
     def signin_by_domain(self, url: str) -> schemas.Response:
         """
@@ -563,9 +515,9 @@ class SiteChatRoom(_PluginBase):
     @staticmethod
     def __signin_base(site_info: CommentedMap) -> Tuple[bool, str]:
         """
-        通用签到处理
+        站点信息处理
         :param site_info: 站点信息
-        :return: 签到结果信息
+        :return: 结果信息
         """
         logger.info("进入 signin_site 函数")
         if not site_info:
