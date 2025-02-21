@@ -475,15 +475,6 @@ class SiteChatRoom(_PluginBase):
         else:
             do_sites = all_sites
 
-        # 今日没数据
-        if not today_history or self._clean:
-            logger.info(f"今日 {today} 未{type_str}，开始{type_str}已选站点")
-            if self._clean:
-                # 关闭开关
-                self._clean = False
-        else:
-            # 需要重试站点
-            retry_sites = today_history.get("retry") or []
             # 今天已签到|登录站点
             already_sites = today_history.get("do") or []
 
