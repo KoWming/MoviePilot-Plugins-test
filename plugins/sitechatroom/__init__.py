@@ -37,7 +37,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.0.1"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -92,8 +92,8 @@ class SiteChatRoom(_PluginBase):
             # 过滤掉已删除的站点
             all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in
                                                                                    self.__custom_sites()]
-            self._sign_sites = [site_id for site_id in all_sites if site_id in self._sign_sites]
-            self._login_sites = [site_id for site_id in all_sites if site_id in self._login_sites]
+            self._chat_sites = [site_id for site_id in all_sites if site_id in self._chat_sites]
+
             # 保存配置
             self.__update_config()
 
