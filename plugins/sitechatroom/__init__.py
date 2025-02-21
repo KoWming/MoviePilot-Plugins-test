@@ -37,7 +37,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.0.3"
+    plugin_version = "1.0.4"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -65,7 +65,7 @@ class SiteChatRoom(_PluginBase):
     _notify: bool = False
     _interval_cnt: int = 5
     _chat_sites: list = []
-    _sites_messages: dict = {}
+    _sites_messages: list = []
     _start_time: int = None
     _end_time: int = None
 
@@ -457,16 +457,6 @@ class SiteChatRoom(_PluginBase):
         签到逻辑
         """
         logger.info("进入 __do 函数")
-        yesterday = today - timedelta(days=1)
-        yesterday_str = yesterday.strftime('%Y-%m-%d')
-        # 删除昨天历史
-        self.del_data(key=type_str + "-" + yesterday_str)
-        self.del_data(key=f"{yesterday.month}月{yesterday.day}日")
-
-        # 查看今天有没有签到|登录历史
-        today = today.strftime('%Y-%m-%d')
-        today_history = self.get_data(key=type_str + "-" + today)
-
         # 查询所有站点
         all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
         # 过滤掉没有选中的站点
@@ -474,21 +464,6 @@ class SiteChatRoom(_PluginBase):
             do_sites = [site for site in all_sites if site.get("id") in do_sites]
         else:
             do_sites = all_sites
-
-            # 今天已签到|登录站点
-            already_sites = today_history.get("do") or []
-
-            # 今日未签|登录站点
-            no_sites = [site for site in do_sites if
-                        site.get("id") not in already_sites or site.get("id")]
-
-            if not no_sites:
-                logger.info(f"今日 {today} 已{type_str}，无重新{type_str}站点，本次任务结束")
-                return
-
-            # 任务站点 = 需要重试+今日未do
-            do_sites = no_sites
-            logger.info(f"今日 {today} 已{type_str}，开始重试命中关键词站点")
 
         if not do_sites:
             logger.info(f"没有需要{type_str}的站点")
@@ -612,7 +587,6 @@ class SiteChatRoom(_PluginBase):
         except Exception as e:
             logger.error(f"获取站点信息时发生异常: {e}")
 
-
         proxies = settings.PROXY if site_info.get("proxy") else None
         proxy_server = settings.PROXY_SERVER if site_info.get("proxy") else None
         if not site_url or not site_cookie:
@@ -699,7 +673,6 @@ class SiteChatRoom(_PluginBase):
         config = self.get_config()
         if config:
             self._chat_sites = self.__remove_site_id(config.get("sign_sites") or [], site_id)
-            self._login_sites = self.__remove_site_id(config.get("login_sites") or [], site_id)
             # 保存配置
             self.__update_config()
 
