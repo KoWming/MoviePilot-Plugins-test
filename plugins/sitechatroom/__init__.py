@@ -456,33 +456,37 @@ class SiteChatRoom(_PluginBase):
         """
         发送消息逻辑
         """
-        logger.info("进入 __send_msgs 函数")
-        # 查询所有站点
-        all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
-        # 过滤掉没有选中的站点
-        if do_sites:
-            do_sites = [site for site in all_sites if site.get("id") in do_sites]
-        else:
-            do_sites = all_sites
+        try:
+            logger.info("进入 __send_msgs 函数")
+            # 查询所有站点
+            all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
+            # 过滤掉没有选中的站点
+            if do_sites:
+                do_sites = [site for site in all_sites if site.get("id") in do_sites]
+            else:
+                do_sites = all_sites
 
-        if not do_sites:
-            logger.info("没有需要发送消息的站点")
-            return
+            if not do_sites:
+                logger.info("没有需要发送消息的站点")
+                return
 
-        # 执行发送消息
-        logger.info("开始执行发送消息任务 ...")
-        for site in do_sites:
-            site_name = site.get("name")
-            logger.info(f"开始处理站点: {site_name}")
-            messages = site_msgs.get(site_name, [])
-            for i, message in enumerate(messages):
-                self.send_msg_to_site(site, message)
-                if i < len(messages) - 1:
-                    logger.info(f"等待 {self._interval_cnt} 秒...")
-                    time.sleep(self._interval_cnt)
+            # 执行发送消息
+            logger.info("开始执行发送消息任务 ...")
+            for site in do_sites:
+                site_name = site.get("name")
+                logger.info(f"开始处理站点: {site_name}")
+                messages = site_msgs.get(site_name, [])
+                for i, message in enumerate(messages):
+                    self.send_msg_to_site(site, message)
+                    if i < len(messages) - 1:
+                        logger.info(f"等待 {self._interval_cnt} 秒...")
+                        time.sleep(self._interval_cnt)
 
-        # 保存配置
-        self.__update_config()
+            # 保存配置
+            self.__update_config()
+        except Exception as e:
+            logger.error(f"发送消息过程中出现异常: {str(e)}")
+
 
 
 
@@ -514,16 +518,22 @@ class SiteChatRoom(_PluginBase):
                 'sent': 'yes',
                 'type': 'shoutbox'
             }
-            res = RequestUtils(cookies=site_cookie,
-                               ua=ua,
-                               proxies=proxies
-                               ).get_res(url=send_url, params=params, headers=headers)
+            try:
+                res = RequestUtils(cookies=site_cookie,
+                                   ua=ua,
+                                   proxies=proxies
+                                   ).get_res(url=send_url, params=params, headers=headers)
+            except Exception as req_err:
+                logger.warn(f"发送请求失败：{str(req_err)}")
+                return
+
             if res and res.status_code == 200:
                 logger.info(f"向 {site_info.get('name')} 发送消息 '{message}' 成功")
             else:
                 logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{res.status_code if res else '无响应'}")
         except Exception as e:
             logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败：{str(e)}")
+
 
     def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
         """
