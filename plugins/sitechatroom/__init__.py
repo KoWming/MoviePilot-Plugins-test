@@ -88,6 +88,7 @@ class SiteChatRoom(_PluginBase):
             self._interval_cnt = config.get("interval_cnt") or 2
             self._chat_sites = config.get("chat_sites") or []
             self._sites_messages = config.get("sites_messages")
+            logger.info(f"读取到的 sites_messages: {self._sites_messages}")  # 添加日志
 
 
             # 过滤掉已删除的站点
@@ -123,18 +124,18 @@ class SiteChatRoom(_PluginBase):
         return self._enabled
 
     def __update_config(self):
-        # 保存配置
-        self.update_config(
-            {
-                "enabled": self._enabled,
-                "notify": self._notify,
-                "cron": self._cron,
-                "onlyonce": self._onlyonce,
-                "interval_cnt": self._interval_cnt,
-                "chat_sites": self._chat_sites,
-                "sites_messages": self._sites_messages,
-            }
-        )
+        config = {
+            "enabled": self._enabled,
+            "notify": self._notify,
+            "cron": self._cron,
+            "onlyonce": self._onlyonce,
+            "interval_cnt": self._interval_cnt,
+            "chat_sites": self._chat_sites,
+            "sites_messages": self._sites_messages
+        }
+        logger.info(f"即将保存的配置: {config}")  # 添加日志
+        self.update_config(config)
+
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
