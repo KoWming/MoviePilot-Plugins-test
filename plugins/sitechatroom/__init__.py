@@ -425,26 +425,32 @@ class SiteChatRoom(_PluginBase):
         """
         自动签到|模拟登录
         """
-        logger.info("进入 sign_in 函数")
-        if event:
-            event_data = event.event_data
-            if not event_data or event_data.get("action") != "site_signin":
-                return
-        # 日期
-        today = datetime.today()
-        if self._start_time and self._end_time:
-            if int(datetime.today().hour) < self._start_time or int(datetime.today().hour) > self._end_time:
-                logger.error(
-                    f"当前时间 {int(datetime.today().hour)} 不在 {self._start_time}-{self._end_time} 范围内，暂不执行任务")
-                return
-        if event:
-            logger.info("收到命令，开始站点签到 ...")
-            self.post_message(channel=event.event_data.get("channel"),
-                              title="开始站点签到 ...",
-                              userid=event.event_data.get("user"))
+        try:
+            logger.info("进入 sign_in 函数")
+            if event:
+                event_data = event.event_data
+                if not event_data or event_data.get("action") != "site_signin":
+                    return
+            # 日期
+            today = datetime.today()
+            if self._start_time and self._end_time:
+                current_hour = int(datetime.today().hour)
+                if current_hour < self._start_time or current_hour > self._end_time:
+                    logger.error(
+                        f"当前时间 {current_hour} 不在 {self._start_time}-{self._end_time} 范围内，暂不执行任务")
+                    return
+            if event:
+                logger.info("收到命令，开始站点签到 ...")
+                self.post_message(channel=event.event_data.get("channel"),
+                                  title="开始站点签到 ...",
+                                  userid=event.event_data.get("user"))
 
-        if self._sign_sites:
-            self.__do(today=today, type_str="签到", do_sites=self._sign_sites, event=event)
+            if self._sign_sites:
+                self.__do(today=today, type_str="签到", do_sites=self._sign_sites, event=event)
+            logger.info("sign_in 函数执行成功")
+        except Exception as e:
+            logger.error(f"sign_in 函数执行失败: {str(e)}")
+
 
     def __do(self, today: datetime, type_str: str, do_sites: list, event: Event = None):
         """
@@ -683,7 +689,7 @@ class SiteChatRoom(_PluginBase):
         :param site_info: 站点信息
         :return: 签到结果信息
         """
-        logger.info("进入 __signin_base 函数")
+        logger.info("进入 signin_site 函数")
         if not site_info:
             return False, ""
         try:
