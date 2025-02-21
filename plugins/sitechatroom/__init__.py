@@ -425,6 +425,7 @@ class SiteChatRoom(_PluginBase):
         """
         自动签到|模拟登录
         """
+        logger.info("进入 sign_in 函数")
         if event:
             event_data = event.event_data
             if not event_data or event_data.get("action") != "site_signin":
@@ -449,6 +450,7 @@ class SiteChatRoom(_PluginBase):
         """
         签到逻辑
         """
+        logger.info("进入 __do 函数")
         yesterday = today - timedelta(days=1)
         yesterday_str = yesterday.strftime('%Y-%m-%d')
         # 删除昨天历史
@@ -635,6 +637,7 @@ class SiteChatRoom(_PluginBase):
         """
         签到一个站点
         """
+        logger.info("进入 signin_by_domain 函数")
         domain = StringUtils.get_url_domain(url)
         site_info = self.sites.get_indexer(domain)
         if not site_info:
@@ -652,6 +655,7 @@ class SiteChatRoom(_PluginBase):
         """
         签到一个站点
         """
+        logger.info("进入 signin_site 函数")
         site_module = self.__build_class(site_info.get("url"))
         # 开始记时
         start_time = datetime.now()
@@ -679,6 +683,7 @@ class SiteChatRoom(_PluginBase):
         :param site_info: 站点信息
         :return: 签到结果信息
         """
+        logger.info("进入 __signin_base 函数")
         if not site_info:
             return False, ""
         try:
