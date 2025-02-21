@@ -445,8 +445,8 @@ class SiteChatRoom(_PluginBase):
                                   title="开始站点签到 ...",
                                   userid=event.event_data.get("user"))
 
-            if self._sign_sites:
-                self.__do(today=today, type_str="签到", do_sites=self._sign_sites, event=event)
+            if self._chat_sites:
+                self.__do(today=today, type_str="签到", do_sites=self._chat_sites, event=event)
             logger.info("sign_in 函数执行成功")
         except Exception as e:
             logger.error(f"sign_in 函数执行失败: {str(e)}")
