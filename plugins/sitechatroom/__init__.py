@@ -66,7 +66,7 @@ class SiteChatRoom(_PluginBase):
     _notify: bool = False
     _interval_cnt: int = 5
     _chat_sites: list = []
-    _sites_messages: list = []
+    _sites_messages: str = ""
     _start_time: int = None
     _end_time: int = None
 
@@ -85,9 +85,9 @@ class SiteChatRoom(_PluginBase):
             self._cron = config.get("cron")
             self._onlyonce = config.get("onlyonce")
             self._notify = config.get("notify")
-            self._interval_cnt = config.get("interval_cnt") or 5
+            self._interval_cnt = config.get("interval_cnt") or 2
             self._chat_sites = config.get("chat_sites") or []
-            self._sites_messages = config.get("sites_messages") or []
+            self._sites_messages = config.get("sites_messages")
 
 
             # 过滤掉已删除的站点
