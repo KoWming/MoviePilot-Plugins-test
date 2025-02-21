@@ -37,7 +37,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "1.0.4"
+    plugin_version = "1.0.5"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -105,7 +105,7 @@ class SiteChatRoom(_PluginBase):
                 # 定时服务
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info("站点自动签到服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.sign_in, trigger='date',
+                self._scheduler.add_job(func=self.send_site_messages, trigger='date',
                                         run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
                                         name="站点自动签到")
 
@@ -161,7 +161,7 @@ class SiteChatRoom(_PluginBase):
                         "id": "AutoSignIn",
                         "name": "站点自动签到服务",
                         "trigger": CronTrigger.from_crontab(self._cron),
-                        "func": self.sign_in,
+                        "func": self.send_site_messages,
                         "kwargs": {}
                     }]
                 else:
@@ -182,7 +182,7 @@ class SiteChatRoom(_PluginBase):
                                 "id": "AutoSignIn",
                                 "name": "站点自动签到服务",
                                 "trigger": "interval",
-                                "func": self.sign_in,
+                                "func": self.send_site_messages,
                                 "kwargs": {
                                     "hours": float(str(cron).strip()),
                                 }
@@ -195,7 +195,7 @@ class SiteChatRoom(_PluginBase):
                             "id": "AutoSignIn",
                             "name": "站点自动签到服务",
                             "trigger": "interval",
-                            "func": self.sign_in,
+                            "func": self.send_site_messages,
                             "kwargs": {
                                 "hours": float(str(self._cron).strip()),
                             }
@@ -215,7 +215,7 @@ class SiteChatRoom(_PluginBase):
                     "id": f"AutoSignIn|{trigger.hour}:{trigger.minute}",
                     "name": "站点自动签到服务",
                     "trigger": "cron",
-                    "func": self.sign_in,
+                    "func": self.send_site_messages,
                     "kwargs": {
                         "hour": trigger.hour,
                         "minute": trigger.minute
@@ -421,15 +421,15 @@ class SiteChatRoom(_PluginBase):
         pass
 
     @eventmanager.register(EventType.PluginAction)
-    def sign_in(self, event: Event = None):
+    def send_site_messages(self, event: Event = None):
         """
-        自动签到|模拟登录
+        自动向站点发送消息
         """
         try:
-            logger.info("进入 sign_in 函数")
+            logger.info("进入 send_site_messages 函数")
             if event:
                 event_data = event.event_data
-                if not event_data or event_data.get("action") != "site_signin":
+                if not event_data or event_data.get("action") != "site_send_messages":
                     return
             # 日期
             today = datetime.today()
@@ -440,23 +440,23 @@ class SiteChatRoom(_PluginBase):
                         f"当前时间 {current_hour} 不在 {self._start_time}-{self._end_time} 范围内，暂不执行任务")
                     return
             if event:
-                logger.info("收到命令，开始站点签到 ...")
+                logger.info("收到命令，开始向站点发送消息 ...")
                 self.post_message(channel=event.event_data.get("channel"),
-                                  title="开始站点签到 ...",
+                                  title="开始向站点发送消息 ...",
                                   userid=event.event_data.get("user"))
 
             if self._chat_sites:
-                self.__do(today=today, type_str="签到", do_sites=self._chat_sites, event=event)
-            logger.info("sign_in 函数执行成功")
+                site_msgs = self.parse_site_messages("\n".join(self._sites_messages))
+                self.__send_msgs(today=today, do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
+            logger.info("send_site_messages 函数执行成功")
         except Exception as e:
-            logger.error(f"sign_in 函数执行失败: {str(e)}")
+            logger.error(f"send_site_messages 函数执行失败: {str(e)}")
 
-
-    def __do(self, today: datetime, type_str: str, do_sites: list, event: Event = None):
+    def __send_msgs(self, today: datetime, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
         """
-        签到逻辑
+        发送消息逻辑
         """
-        logger.info("进入 __do 函数")
+        logger.info("进入 __send_msgs 函数")
         # 查询所有站点
         all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
         # 过滤掉没有选中的站点
@@ -466,142 +466,66 @@ class SiteChatRoom(_PluginBase):
             do_sites = all_sites
 
         if not do_sites:
-            logger.info(f"没有需要{type_str}的站点")
+            logger.info("没有需要发送消息的站点")
             return
 
-        # 执行签到
-        logger.info(f"开始执行{type_str}任务 ...")
-        if type_str == "签到":
-            with ThreadPool(min(len(do_sites), int(self._interval_cnt))) as p:
-                status = p.map(self.signin_site, do_sites)
+        # 执行发送消息
+        logger.info("开始执行发送消息任务 ...")
+        with ThreadPool(min(len(do_sites), int(self._interval_cnt))) as p:
+            p.starmap(self.send_msg_to_site, [(site, site_msgs.get(site.get("name"), [])) for site in do_sites])
         # 保存配置
         self.__update_config()
 
-    def signin_by_domain(self, url: str) -> schemas.Response:
+    def send_msg_to_site(self, site_info: CommentedMap, messages: List[str]):
         """
-        签到一个站点
+        向一个站点发送消息
         """
-        logger.info("进入 signin_by_domain 函数")
-        domain = StringUtils.get_url_domain(url)
-        site_info = self.sites.get_indexer(domain)
-        if not site_info:
-            return schemas.Response(
-                success=True,
-                message=f"站点【{url}】不存在"
-            )
-        else:
-            return schemas.Response(
-                success=True,
-                message=self.signin_site(site_info)
-            )
-
-    def signin_site(self, site_info: CommentedMap) -> Tuple[str, str]:
-        """
-        签到一个站点
-        """
-        logger.info("进入 signin_site 函数")
-        # 开始记时
-        start_time = datetime.now()
-        state, message = self.__signin_base(site_info)
-        # 统计
-        seconds = (datetime.now() - start_time).seconds
-        domain = StringUtils.get_url_domain(site_info.get('url'))
-        if state:
-            self.sitestatistic.success(domain=domain, seconds=seconds)
-        else:
-            self.sitestatistic.fail(domain)
-        return site_info.get("name"), message
-
-    @staticmethod
-    def __signin_base(site_info: CommentedMap) -> Tuple[bool, str]:
-        """
-        站点信息处理
-        :param site_info: 站点信息
-        :return: 结果信息
-        """
-        logger.info("进入 signin_site 函数")
-        if not site_info:
-            return False, ""
-        try:
-            if site_info is None:
-                logger.error("site_info 为 None，无法获取站点信息")
-            else:
-                site = site_info.get("name")
-                logger.info(f"获取到站点名称: {site}")
-                site_url = site_info.get("url")
-                logger.info(f"获取到站点URL: {site_url}")
-                site_cookie = site_info.get("cookie")
-                logger.info(f"获取到站点Cookie: {site_cookie}")
-                ua = site_info.get("ua")
-                logger.info(f"获取到站点User-Agent: {ua}")
-                render = site_info.get("render")
-                logger.info(f"获取到站点渲染配置: {render}")
-        except Exception as e:
-            logger.error(f"获取站点信息时发生异常: {e}")
-
+        logger.info(f"进入 send_msg_to_site 函数，准备向 {site_info.get('name')} 发送消息")
+        site_url = site_info.get("url")
+        site_cookie = site_info.get("cookie")
+        ua = site_info.get("ua")
         proxies = settings.PROXY if site_info.get("proxy") else None
-        proxy_server = settings.PROXY_SERVER if site_info.get("proxy") else None
+
         if not site_url or not site_cookie:
-            logger.warn(f"未配置 {site} 的站点地址或Cookie，无法签到")
-            return False, ""
-        # 模拟登录
-        try:
-            # 访问链接
-            checkin_url = site_url
-            if site_url.find("attendance.php") == -1:
-                # 拼登签到地址
-                checkin_url = urljoin(site_url, "attendance.php")
-            logger.info(f"开始站点签到：{site}，地址：{checkin_url}...")
-            if render:
-                page_source = PlaywrightHelper().get_page_source(url=checkin_url,
-                                                                 cookies=site_cookie,
-                                                                 ua=ua,
-                                                                 proxies=proxy_server)
-                if not SiteUtils.is_logged_in(page_source):
-                    if under_challenge(page_source):
-                        return False, f"无法通过Cloudflare！"
-                    return False, f"仿真登录失败，Cookie已失效！"
-                else:
-                    # 判断是否已签到
-                    if re.search(r'已签|签到已得', page_source, re.IGNORECASE) \
-                            or SiteUtils.is_checkin(page_source):
-                        return True, f"签到成功"
-                    return True, "仿真签到成功"
-            else:
+            logger.warn(f"未配置 {site_info.get('name')} 的站点地址或Cookie，无法继续")
+            return
+
+        for message in messages:
+            try:
+                # 这里需要根据实际站点的消息发送接口进行修改
+                # 示例：假设消息发送接口为 /send_message，POST请求，需要传递 message 参数
+                send_url = urljoin(site_url, "/send_message")
+                data = {
+                    "message": message
+                }
                 res = RequestUtils(cookies=site_cookie,
                                    ua=ua,
                                    proxies=proxies
-                                   ).get_res(url=checkin_url)
-                if not res and site_url != checkin_url:
-                    logger.info(f"开始站点模拟登录：{site}，地址：{site_url}...")
-                    res = RequestUtils(cookies=site_cookie,
-                                       ua=ua,
-                                       proxies=proxies
-                                       ).get_res(url=site_url)
-                # 判断登录状态
-                if res and res.status_code in [200, 500, 403]:
-                    if not SiteUtils.is_logged_in(res.text):
-                        if under_challenge(res.text):
-                            msg = "站点被Cloudflare防护，请打开站点浏览器仿真"
-                        elif res.status_code == 200:
-                            msg = "Cookie已失效"
-                        else:
-                            msg = f"状态码：{res.status_code}"
-                        logger.warn(f"{site} 签到失败，{msg}")
-                        return False, f"签到失败，{msg}！"
-                    else:
-                        logger.info(f"{site} 签到成功")
-                        return True, f"签到成功"
-                elif res is not None:
-                    logger.warn(f"{site} 签到失败，状态码：{res.status_code}")
-                    return False, f"签到失败，状态码：{res.status_code}！"
+                                   ).post_res(url=send_url, data=data)
+                if res and res.status_code == 200:
+                    logger.info(f"向 {site_info.get('name')} 发送消息 '{message}' 成功")
                 else:
-                    logger.warn(f"{site} 签到失败，无法打开网站")
-                    return False, f"签到失败，无法打开网站！"
-        except Exception as e:
-            logger.warn("%s 签到失败：%s" % (site, str(e)))
-            traceback.print_exc()
-            return False, f"签到失败：{str(e)}！"
+                    logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{res.status_code if res else '无响应'}")
+            except Exception as e:
+                logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败：{str(e)}")
+            time.sleep(self._interval_cnt)
+
+    def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
+        """
+        解析输入的站点消息
+        :param site_messages: 多行文本输入
+        :return: 字典，键为站点名称，值为该站点的消息
+        """
+        result = {}
+        lines = site_messages.strip().split('\n')
+        for line in lines:
+            parts = line.split('|')
+            if len(parts) > 1:
+                site_name = parts[0].strip()
+                messages = [msg.strip() for msg in parts[1:]]
+                result[site_name] = messages
+        return result
+
 
     def stop_service(self):
         """
@@ -624,7 +548,7 @@ class SiteChatRoom(_PluginBase):
         site_id = event.event_data.get("site_id")
         config = self.get_config()
         if config:
-            self._chat_sites = self.__remove_site_id(config.get("sign_sites") or [], site_id)
+            self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
             # 保存配置
             self.__update_config()
 
