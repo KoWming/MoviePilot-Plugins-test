@@ -66,7 +66,7 @@ class SiteChatRoom(_PluginBase):
     _notify: bool = False
     _interval_cnt: int = 5
     _chat_sites: list = []
-    _sites_messages: str = ""
+    _sites_messages: list = []
     _start_time: int = None
     _end_time: int = None
 
@@ -87,7 +87,7 @@ class SiteChatRoom(_PluginBase):
             self._notify = config.get("notify")
             self._interval_cnt = config.get("interval_cnt") or 2
             self._chat_sites = config.get("chat_sites") or []
-            self._sites_messages = config.get("sites_messages")
+            self._sites_messages = str(config.get("sites_messages")).split("\n")
             logger.info(f"读取到的 sites_messages: {self._sites_messages}")  # 添加日志
 
 
