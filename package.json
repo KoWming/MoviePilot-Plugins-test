@@ -14,66 +14,17 @@
         },
         "v2": true
     },
-    "InvitesSignin": {
-        "name": "药丸签到",
-        "description": "药丸论坛签到。",
-        "labels": "站点",
-        "version": "1.4.1",
-        "icon": "invites.png",
-        "author": "thsrite",
-        "level": 2,
-        "v2": true,
-        "history": {
-            "v1.4.1": "修改invites域名前缀。",
-            "v1.4": "自定义保留消息天数"
-        }
-    },
-    "StationCall": {
-        "name": "站点喊话",
-        "description": "特定站点喊话领取奖励。",
-        "labels": "站点",
-        "version": "0.6.1",
-        "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/Lucky_B.png",
-        "author": "KoWming",
-        "level": 2,
-        "v2": true,
-        "history": {
-            "v0.1": "初始版本。"
-        }
-    },
-    "AutoSignIn": {
-        "name": "站点自动签到",
-        "description": "自动模拟登录、签到站点。",
-        "labels": "站点",
-        "version": "2.4.3",
-        "icon": "signin.png",
-        "author": "thsrite",
-        "level": 2,
-        "history": {
-            "v2.4.3": "修复空签到失败问题",
-            "v2.4.2": "修复PT时间签到失败问题",
-            "v2.4.1": "修复海胆签到失败问题",
-            "v2.4": "适配m-team Api地址变化",
-            "v2.3.2": "修复YemaPT登录失败，支持YemaPT自动签到",
-            "v2.3.1": "修复签到报错问题",
-            "v2.3": "优化模拟登录逻辑，支持YemaPT模拟登录",
-            "v2.2": "适配馒头最新变化，需要升级至v1.8.5+版本且维护好Authorization",
-            "v2.1": "增强API安全性",
-            "v2.0": "站点签到时更新站点使用统计信息，需要主程序升级至v1.8.3+版本",
-            "v1.9": "支持馒头新架构自动签到"
-        }
-    },
     "SiteChatRoom": {
         "name": "站点聊天室",
         "description": "自动向多个站点发送预设消息。",
         "labels": "站点",
-        "version": "2.8.9",
+        "version": "1.0",
         "icon": "signin.png",
         "author": "KoWming",
         "level": 2,
         "v2": true,
         "history": {
-            "v2.8": "修复问题"
+            "v1.0": "修复问题"
         }
     }
 }

@@ -1,5 +1,4 @@
 import re
-import time
 import traceback
 from datetime import datetime, timedelta
 from multiprocessing.dummy import Pool as ThreadPool
@@ -7,7 +6,6 @@ from multiprocessing.pool import ThreadPool
 from typing import Any, List, Dict, Tuple, Optional
 from urllib.parse import urljoin
 
-from requests import Response
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -29,7 +27,6 @@ from app.utils.http import RequestUtils
 from app.utils.site import SiteUtils
 from app.utils.string import StringUtils
 from app.utils.timer import TimerUtils
-import os
 
 
 class SiteChatRoom(_PluginBase):
@@ -40,7 +37,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.8.9"
+    plugin_version = "1.0"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -60,8 +57,6 @@ class SiteChatRoom(_PluginBase):
     event: EventManager = None
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
-    # 加载的模块
-    _site_schema: list = []
 
     # 配置属性
     _enabled: bool = False
@@ -70,7 +65,7 @@ class SiteChatRoom(_PluginBase):
     _notify: bool = False
     _interval_cnt: int = 5
     _chat_sites: list = []
-    _site_messages: dict = {}
+    _sites_messages: dict = {}
     _start_time: int = None
     _end_time: int = None
 
@@ -91,32 +86,28 @@ class SiteChatRoom(_PluginBase):
             self._notify = config.get("notify")
             self._interval_cnt = config.get("interval_cnt") or 5
             self._chat_sites = config.get("chat_sites") or []
-            self._site_messages = config.get("site_messages") or []
+            self._sites_messages = config.get("sites_messages") or []
 
-            # 确保 _site_messages 是一个字符串列表
-            if isinstance(self._site_messages, dict):
-                self._site_messages = [f"{site_id}|{'|'.join(messages)}" for site_id, messages in self._site_messages.items()]
 
             # 过滤掉已删除的站点
             all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in
-                                                                                self.__custom_sites()]
-            self._chat_sites = [site_id for site_id in all_sites if site_id in self._chat_sites]
+                                                                                   self.__custom_sites()]
+            self._sign_sites = [site_id for site_id in all_sites if site_id in self._sign_sites]
+            self._login_sites = [site_id for site_id in all_sites if site_id in self._login_sites]
             # 保存配置
             self.__update_config()
 
         # 加载模块
         if self._enabled or self._onlyonce:
-            # 这里暂时不需要加载模块，因为主要是发送消息
-            pass
 
             # 立即运行一次
             if self._onlyonce:
                 # 定时服务
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
-                logger.info("站点聊天室消息发送服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.send_chat_messages, trigger='date',
+                logger.info("站点自动签到服务启动，立即运行一次")
+                self._scheduler.add_job(func=self.sign_in, trigger='date',
                                         run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                        name="站点聊天室消息发送")
+                                        name="站点自动签到")
 
                 # 关闭一次性开关
                 self._onlyonce = False
@@ -141,7 +132,7 @@ class SiteChatRoom(_PluginBase):
                 "onlyonce": self._onlyonce,
                 "interval_cnt": self._interval_cnt,
                 "chat_sites": self._chat_sites,
-                "site_messages": self._site_messages,
+                "sites_messages": self._sites_messages,
             }
         )
 
@@ -167,10 +158,10 @@ class SiteChatRoom(_PluginBase):
             try:
                 if str(self._cron).strip().count(" ") == 4:
                     return [{
-                        "id": "SiteChatRoom",
-                        "name": "站点聊天室消息发送服务",
+                        "id": "AutoSignIn",
+                        "name": "站点自动签到服务",
                         "trigger": CronTrigger.from_crontab(self._cron),
-                        "func": self.send_chat_messages,
+                        "func": self.sign_in,
                         "kwargs": {}
                     }]
                 else:
@@ -188,23 +179,23 @@ class SiteChatRoom(_PluginBase):
                             self._end_time = int(times[1])
                         if self._start_time and self._end_time:
                             return [{
-                                "id": "SiteChatRoom",
-                                "name": "站点聊天室消息发送服务",
+                                "id": "AutoSignIn",
+                                "name": "站点自动签到服务",
                                 "trigger": "interval",
-                                "func": self.send_chat_messages,
+                                "func": self.sign_in,
                                 "kwargs": {
                                     "hours": float(str(cron).strip()),
                                 }
                             }]
                         else:
-                            logger.error("站点聊天室消息发送服务启动失败，周期格式错误")
+                            logger.error("站点自动签到服务启动失败，周期格式错误")
                     else:
                         # 默认0-24 按照周期运行
                         return [{
-                            "id": "SiteChatRoom",
-                            "name": "站点聊天室消息发送服务",
+                            "id": "AutoSignIn",
+                            "name": "站点自动签到服务",
                             "trigger": "interval",
-                            "func": self.send_chat_messages,
+                            "func": self.sign_in,
                             "kwargs": {
                                 "hours": float(str(self._cron).strip()),
                             }
@@ -221,10 +212,10 @@ class SiteChatRoom(_PluginBase):
             ret_jobs = []
             for trigger in triggers:
                 ret_jobs.append({
-                    "id": f"SiteChatRoom|{trigger.hour}:{trigger.minute}",
-                    "name": "站点聊天室消息发送服务",
+                    "id": f"AutoSignIn|{trigger.hour}:{trigger.minute}",
+                    "name": "站点自动签到服务",
                     "trigger": "cron",
-                    "func": self.send_chat_messages,
+                    "func": self.sign_in,
                     "kwargs": {
                         "hour": trigger.hour,
                         "minute": trigger.minute
@@ -429,156 +420,426 @@ class SiteChatRoom(_PluginBase):
     def get_page(self) -> List[dict]:
         pass
 
-    def get_site_config(self, url: str) -> schemas.Response:
-        """获取站点配置信息"""
+    @eventmanager.register(EventType.PluginAction)
+    def sign_in(self, event: Event = None):
+        """
+        自动签到|模拟登录
+        """
+        if event:
+            event_data = event.event_data
+            if not event_data or event_data.get("action") != "site_signin":
+                return
+        # 日期
+        today = datetime.today()
+        if self._start_time and self._end_time:
+            if int(datetime.today().hour) < self._start_time or int(datetime.today().hour) > self._end_time:
+                logger.error(
+                    f"当前时间 {int(datetime.today().hour)} 不在 {self._start_time}-{self._end_time} 范围内，暂不执行任务")
+                return
+        if event:
+            logger.info("收到命令，开始站点签到 ...")
+            self.post_message(channel=event.event_data.get("channel"),
+                              title="开始站点签到 ...",
+                              userid=event.event_data.get("user"))
+
+        if self._sign_sites:
+            self.__do(today=today, type_str="签到", do_sites=self._sign_sites, event=event)
+        if self._login_sites:
+            self.__do(today=today, type_str="登录", do_sites=self._login_sites, event=event)
+
+    def __do(self, today: datetime, type_str: str, do_sites: list, event: Event = None):
+        """
+        签到逻辑
+        """
+        yesterday = today - timedelta(days=1)
+        yesterday_str = yesterday.strftime('%Y-%m-%d')
+        # 删除昨天历史
+        self.del_data(key=type_str + "-" + yesterday_str)
+        self.del_data(key=f"{yesterday.month}月{yesterday.day}日")
+
+        # 查看今天有没有签到|登录历史
+        today = today.strftime('%Y-%m-%d')
+        today_history = self.get_data(key=type_str + "-" + today)
+
+        # 查询所有站点
+        all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
+        # 过滤掉没有选中的站点
+        if do_sites:
+            do_sites = [site for site in all_sites if site.get("id") in do_sites]
+        else:
+            do_sites = all_sites
+
+        # 今日没数据
+        if not today_history or self._clean:
+            logger.info(f"今日 {today} 未{type_str}，开始{type_str}已选站点")
+            if self._clean:
+                # 关闭开关
+                self._clean = False
+        else:
+            # 需要重试站点
+            retry_sites = today_history.get("retry") or []
+            # 今天已签到|登录站点
+            already_sites = today_history.get("do") or []
+
+            # 今日未签|登录站点
+            no_sites = [site for site in do_sites if
+                        site.get("id") not in already_sites or site.get("id") in retry_sites]
+
+            if not no_sites:
+                logger.info(f"今日 {today} 已{type_str}，无重新{type_str}站点，本次任务结束")
+                return
+
+            # 任务站点 = 需要重试+今日未do
+            do_sites = no_sites
+            logger.info(f"今日 {today} 已{type_str}，开始重试命中关键词站点")
+
+        if not do_sites:
+            logger.info(f"没有需要{type_str}的站点")
+            return
+
+        # 执行签到
+        logger.info(f"开始执行{type_str}任务 ...")
+        if type_str == "签到":
+            with ThreadPool(min(len(do_sites), int(self._queue_cnt))) as p:
+                status = p.map(self.signin_site, do_sites)
+        else:
+            with ThreadPool(min(len(do_sites), int(self._queue_cnt))) as p:
+                status = p.map(self.login_site, do_sites)
+
+        if status:
+            logger.info(f"站点{type_str}任务完成！")
+            # 获取今天的日期
+            key = f"{datetime.now().month}月{datetime.now().day}日"
+            today_data = self.get_data(key)
+            if today_data:
+                if not isinstance(today_data, list):
+                    today_data = [today_data]
+                for s in status:
+                    today_data.append({
+                        "site": s[0],
+                        "status": s[1]
+                    })
+            else:
+                today_data = [{
+                    "site": s[0],
+                    "status": s[1]
+                } for s in status]
+            # 保存数据
+            self.save_data(key, today_data)
+
+            # 命中重试词的站点id
+            retry_sites = []
+            # 命中重试词的站点签到msg
+            retry_msg = []
+            # 登录成功
+            login_success_msg = []
+            # 签到成功
+            sign_success_msg = []
+            # 已签到
+            already_sign_msg = []
+            # 仿真签到成功
+            fz_sign_msg = []
+            # 失败｜错误
+            failed_msg = []
+
+            sites = {site.get('name'): site.get("id") for site in self.sites.get_indexers() if not site.get("public")}
+            for s in status:
+                site_name = s[0]
+                site_id = None
+                if site_name:
+                    site_id = sites.get(site_name)
+
+                if 'Cookie已失效' in str(s) and site_id:
+                    # 触发自动登录插件登录
+                    logger.info(f"触发站点 {site_name} 自动登录更新Cookie和Ua")
+                    self.eventmanager.send_event(EventType.PluginAction,
+                                                 {
+                                                     "site_id": site_id,
+                                                     "action": "site_refresh"
+                                                 })
+                # 记录本次命中重试关键词的站点
+                if self._retry_keyword:
+                    if site_id:
+                        match = re.search(self._retry_keyword, s[1])
+                        if match:
+                            logger.debug(f"站点 {site_name} 命中重试关键词 {self._retry_keyword}")
+                            retry_sites.append(site_id)
+                            # 命中的站点
+                            retry_msg.append(s)
+                            continue
+
+                if "登录成功" in str(s):
+                    login_success_msg.append(s)
+                elif "仿真签到成功" in str(s):
+                    fz_sign_msg.append(s)
+                    continue
+                elif "签到成功" in str(s):
+                    sign_success_msg.append(s)
+                elif '已签到' in str(s):
+                    already_sign_msg.append(s)
+                else:
+                    failed_msg.append(s)
+
+            if not self._retry_keyword:
+                # 没设置重试关键词则重试已选站点
+                retry_sites = self._sign_sites if type_str == "签到" else self._login_sites
+            logger.debug(f"下次{type_str}重试站点 {retry_sites}")
+
+            # 存入历史
+            self.save_data(key=type_str + "-" + today,
+                           value={
+                               "do": self._sign_sites if type_str == "签到" else self._login_sites,
+                               "retry": retry_sites
+                           })
+
+            # 自动Cloudflare IP优选
+            if self._auto_cf and int(self._auto_cf) > 0 and retry_msg and len(retry_msg) >= int(self._auto_cf):
+                self.eventmanager.send_event(EventType.PluginAction, {
+                    "action": "cloudflare_speedtest"
+                })
+
+            # 发送通知
+            if self._notify:
+                # 签到详细信息 登录成功、签到成功、已签到、仿真签到成功、失败--命中重试
+                signin_message = login_success_msg + sign_success_msg + already_sign_msg + fz_sign_msg + failed_msg
+                if len(retry_msg) > 0:
+                    signin_message += retry_msg
+
+                signin_message = "\n".join([f'【{s[0]}】{s[1]}' for s in signin_message if s])
+                self.post_message(title=f"【站点自动{type_str}】",
+                                  mtype=NotificationType.SiteMessage,
+                                  text=f"全部{type_str}数量: {len(self._sign_sites if type_str == '签到' else self._login_sites)} \n"
+                                       f"本次{type_str}数量: {len(do_sites)} \n"
+                                       f"下次{type_str}数量: {len(retry_sites) if self._retry_keyword else 0} \n"
+                                       f"{signin_message}"
+                                  )
+            if event:
+                self.post_message(channel=event.event_data.get("channel"),
+                                  title=f"站点{type_str}完成！", userid=event.event_data.get("user"))
+        else:
+            logger.error(f"站点{type_str}任务失败！")
+            if event:
+                self.post_message(channel=event.event_data.get("channel"),
+                                  title=f"站点{type_str}任务失败！", userid=event.event_data.get("user"))
+        # 保存配置
+        self.__update_config()
+
+    def __build_class(self, url) -> Any:
+        for site_schema in self._site_schema:
+            try:
+                if site_schema.match(url):
+                    return site_schema
+            except Exception as e:
+                logger.error("站点模块加载失败：%s" % str(e))
+        return None
+
+    def signin_by_domain(self, url: str) -> schemas.Response:
+        """
+        签到一个站点
+        """
         domain = StringUtils.get_url_domain(url)
         site_info = self.sites.get_indexer(domain)
         if not site_info:
-            logger.warn(f"站点配置不存在，跳过处理")
-            return None
-        return site_info
+            return schemas.Response(
+                success=True,
+                message=f"站点【{url}】不存在"
+            )
+        else:
+            return schemas.Response(
+                success=True,
+                message=self.signin_site(site_info)
+            )
 
-    def send_chat_messages(self, event: Event = None):
-        """向选定站点发送聊天消息（完整实现）"""
-        try:
-            logger.info("开始执行send_chat_messages函数")
-            if event:
-                event_data = event.event_data
-                if not event_data or event_data.get("action") != "send_chat_messages":
-                    return
-                logger.info("收到命令，开始向站点发送消息 ...")
-                self.post_message(channel=event.event_data.get("channel"),
-                                title="开始向站点发送消息 ...",
-                                userid=event.event_data.get("user"))
+    def signin_site(self, site_info: CommentedMap) -> Tuple[str, str]:
+        """
+        签到一个站点
+        """
+        site_module = self.__build_class(site_info.get("url"))
+        # 开始记时
+        start_time = datetime.now()
+        if site_module and hasattr(site_module, "signin"):
+            try:
+                state, message = site_module().signin(site_info)
+            except Exception as e:
+                traceback.print_exc()
+                state, message = False, f"签到失败：{str(e)}"
+        else:
+            state, message = self.__signin_base(site_info)
+        # 统计
+        seconds = (datetime.now() - start_time).seconds
+        domain = StringUtils.get_url_domain(site_info.get('url'))
+        if state:
+            self.sitestatistic.success(domain=domain, seconds=seconds)
+        else:
+            self.sitestatistic.fail(domain)
+        return site_info.get("name"), message
 
-            if self._chat_sites:
-                # 获取所有可用站点（内置+自定义）
-                all_sites = {
-                    str(site.id): site
-                    for site in self.siteoper.list_order_by_pri()
-                }
-                all_sites.update({
-                    site.get("id"): site
-                    for site in self.__custom_sites()
-                })
-
-                logger.debug(f"all_sites 类型: {type(all_sites)}")
-                logger.debug(f"all_sites 内容: {all_sites}")
-
-                for site_id in self._chat_sites:
-                    str_site_id = str(site_id)
-                    # 获取站点配置信息
-                    site_info = all_sites.get(str_site_id)
-                    if not site_info:
-                        logger.warn(f"站点 {site_id} 配置不存在，跳过处理")
-                        continue
-
-                    # 解析消息列表
-                    message_dict = {}
-                    for line in self._site_messages:
-                        parts = line.strip().split("|")
-                        if len(parts) > 1:
-                            site_name = parts[0]
-                            messages = parts[1:]
-                            for site_id, site in all_sites.items():
-                                if site.get("name") == site_name:
-                                    message_dict[site_id] = messages
-
-                    # 获取消息列表
-                    messages = message_dict.get(str_site_id)
-                    if not messages:
-                        logger.info(f"站点 {site_info.get('name')} 没有需要发送的消息")
-                        continue
-                    
-                    # 执行消息发送
-                    self.__send_messages_to_site(site_info, messages)
-        except Exception as e:
-            logger.error(f"send_chat_messages函数执行失败: {str(e)}")
-            traceback.print_exc()
-
-    def __send_messages_to_site(self, site_info: CommentedMap, messages: List[str]):
-        """向单个站点发送消息完整实现"""
-        site_name = site_info.get("name")
+    @staticmethod
+    def __signin_base(site_info: CommentedMap) -> Tuple[bool, str]:
+        """
+        通用签到处理
+        :param site_info: 站点信息
+        :return: 签到结果信息
+        """
+        if not site_info:
+            return False, ""
+        site = site_info.get("name")
         site_url = site_info.get("url")
         site_cookie = site_info.get("cookie")
-        ua = site_info.get("ua") or settings.USER_AGENT
+        ua = site_info.get("ua")
         render = site_info.get("render")
-        
-        if not all([site_url, site_cookie]):
-            logger.warn(f"站点 {site_name} 配置不完整，需要URL和Cookie")
-            return
-
-        success_count = 0
-        for index, message in enumerate(messages, 1):
-            try:
-                # 渲染模式处理（Playwright）
-                if render:
-                    with ThreadPool(processes=1) as pool:
-                        result = pool.apply_async(self._send_with_playwright,
-                                                (site_url, site_cookie, ua, message))
-                        result.get(timeout=120)
-                # 普通模式处理
+        proxies = settings.PROXY if site_info.get("proxy") else None
+        proxy_server = settings.PROXY_SERVER if site_info.get("proxy") else None
+        if not site_url or not site_cookie:
+            logger.warn(f"未配置 {site} 的站点地址或Cookie，无法签到")
+            return False, ""
+        # 模拟登录
+        try:
+            # 访问链接
+            checkin_url = site_url
+            if site_url.find("attendance.php") == -1:
+                # 拼登签到地址
+                checkin_url = urljoin(site_url, "attendance.php")
+            logger.info(f"开始站点签到：{site}，地址：{checkin_url}...")
+            if render:
+                page_source = PlaywrightHelper().get_page_source(url=checkin_url,
+                                                                 cookies=site_cookie,
+                                                                 ua=ua,
+                                                                 proxies=proxy_server)
+                if not SiteUtils.is_logged_in(page_source):
+                    if under_challenge(page_source):
+                        return False, f"无法通过Cloudflare！"
+                    return False, f"仿真登录失败，Cookie已失效！"
                 else:
-                    self._send_with_requests(site_url, site_cookie, ua, message)
-                
-                success_count += 1
-                logger.info(f"[{site_name}] 第{index}条消息发送成功: {message}")
-                
-                # 执行间隔（最后一条不等待）
-                if index < len(messages):
-                    time.sleep(self._interval_cnt)
+                    # 判断是否已签到
+                    if re.search(r'已签|签到已得', page_source, re.IGNORECASE) \
+                            or SiteUtils.is_checkin(page_source):
+                        return True, f"签到成功"
+                    return True, "仿真签到成功"
+            else:
+                res = RequestUtils(cookies=site_cookie,
+                                   ua=ua,
+                                   proxies=proxies
+                                   ).get_res(url=checkin_url)
+                if not res and site_url != checkin_url:
+                    logger.info(f"开始站点模拟登录：{site}，地址：{site_url}...")
+                    res = RequestUtils(cookies=site_cookie,
+                                       ua=ua,
+                                       proxies=proxies
+                                       ).get_res(url=site_url)
+                # 判断登录状态
+                if res and res.status_code in [200, 500, 403]:
+                    if not SiteUtils.is_logged_in(res.text):
+                        if under_challenge(res.text):
+                            msg = "站点被Cloudflare防护，请打开站点浏览器仿真"
+                        elif res.status_code == 200:
+                            msg = "Cookie已失效"
+                        else:
+                            msg = f"状态码：{res.status_code}"
+                        logger.warn(f"{site} 签到失败，{msg}")
+                        return False, f"签到失败，{msg}！"
+                    else:
+                        logger.info(f"{site} 签到成功")
+                        return True, f"签到成功"
+                elif res is not None:
+                    logger.warn(f"{site} 签到失败，状态码：{res.status_code}")
+                    return False, f"签到失败，状态码：{res.status_code}！"
+                else:
+                    logger.warn(f"{site} 签到失败，无法打开网站")
+                    return False, f"签到失败，无法打开网站！"
+        except Exception as e:
+            logger.warn("%s 签到失败：%s" % (site, str(e)))
+            traceback.print_exc()
+            return False, f"签到失败：{str(e)}！"
 
+    def login_site(self, site_info: CommentedMap) -> Tuple[str, str]:
+        """
+        模拟登录一个站点
+        """
+        site_module = self.__build_class(site_info.get("url"))
+        # 开始记时
+        start_time = datetime.now()
+        if site_module and hasattr(site_module, "login"):
+            try:
+                state, message = site_module().login(site_info)
             except Exception as e:
-                logger.error(f"[{site_name}] 消息发送失败: {str(e)}")
                 traceback.print_exc()
+                state, message = False, f"模拟登录失败：{str(e)}"
+        else:
+            state, message = self.__login_base(site_info)
+        # 统计
+        seconds = (datetime.now() - start_time).seconds
+        domain = StringUtils.get_url_domain(site_info.get('url'))
+        if state:
+            self.sitestatistic.success(domain=domain, seconds=seconds)
+        else:
+            self.sitestatistic.fail(domain)
+        return site_info.get("name"), message
 
-        # 发送通知
-        if self._notify:
-            status = f"成功发送 {success_count}/{len(messages)} 条消息"
-            self.post_message(channel=NotificationType.SiteChatRoom,
-                            title=f"[{site_name}] 消息发送完成",
-                            text=status)
-
-    def _send_with_playwright(self, url: str, cookie: str, ua: str, message: str):
-        """Playwright实现发送逻辑"""
-        try:
-            with PlaywrightHelper() as helper:
-                page = helper.get_page(url=url, cookies=cookie, ua=ua)
-                page.fill('#iframe-shout-box', message)
-                page.click('#hbsubmit')
-                helper.sleep(5)
-        except Exception as e:
-            raise Exception(f"浏览器模式发送失败: {str(e)}")
-
-    def _send_with_requests(self, url: str, cookie: str, ua: str, message: str):
-        """Requests实现发送逻辑"""
-        message_url = urljoin(url, "/shoutbox.php")
-        headers = {"User-Agent": ua, "Cookie": cookie}
-        
-        try:
-            response = RequestUtils(headers=headers).post(
-                url=message_url,
-                data={"message": message},
-                timeout=60
-            )
-            if not response or response.status_code != 200:
-                raise Exception(f"HTTP状态码异常: {getattr(response, 'status_code', '无响应')}")
-        except Exception as e:
-            raise Exception(f"API模式发送失败: {str(e)}")
-
-    def post_message(self, channel: NotificationType, title: str, text: str = None, userid: str = None):
+    @staticmethod
+    def __login_base(site_info: CommentedMap) -> Tuple[bool, str]:
         """
-        发送通知消息
+        模拟登录通用处理
+        :param site_info: 站点信息
+        :return: 签到结果信息
         """
+        if not site_info:
+            return False, ""
+        site = site_info.get("name")
+        site_url = site_info.get("url")
+        site_cookie = site_info.get("cookie")
+        ua = site_info.get("ua")
+        render = site_info.get("render")
+        proxies = settings.PROXY if site_info.get("proxy") else None
+        proxy_server = settings.PROXY_SERVER if site_info.get("proxy") else None
+        if not site_url or not site_cookie:
+            logger.warn(f"未配置 {site} 的站点地址或Cookie，无法签到")
+            return False, ""
+        # 模拟登录
         try:
-            self.eventmanager.send_event(EventType.Notify, {
-                "channel": channel,
-                "title": title,
-                "text": text,
-                "userid": userid
-            })
+            # 访问链接
+            site_url = str(site_url).replace("attendance.php", "")
+            logger.info(f"开始站点模拟登录：{site}，地址：{site_url}...")
+            if render:
+                page_source = PlaywrightHelper().get_page_source(url=site_url,
+                                                                 cookies=site_cookie,
+                                                                 ua=ua,
+                                                                 proxies=proxy_server)
+                if not SiteUtils.is_logged_in(page_source):
+                    if under_challenge(page_source):
+                        return False, f"无法通过Cloudflare！"
+                    return False, f"仿真登录失败，Cookie已失效！"
+                else:
+                    return True, "模拟登录成功"
+            else:
+                res = RequestUtils(cookies=site_cookie,
+                                   ua=ua,
+                                   proxies=proxies
+                                   ).get_res(url=site_url)
+                # 判断登录状态
+                if res and res.status_code in [200, 500, 403]:
+                    if not SiteUtils.is_logged_in(res.text):
+                        if under_challenge(res.text):
+                            msg = "站点被Cloudflare防护，请打开站点浏览器仿真"
+                        elif res.status_code == 200:
+                            msg = "Cookie已失效"
+                        else:
+                            msg = f"状态码：{res.status_code}"
+                        logger.warn(f"{site} 模拟登录失败，{msg}")
+                        return False, f"模拟登录失败，{msg}！"
+                    else:
+                        logger.info(f"{site} 模拟登录成功")
+                        return True, f"模拟登录成功"
+                elif res is not None:
+                    logger.warn(f"{site} 模拟登录失败，状态码：{res.status_code}")
+                    return False, f"模拟登录失败，状态码：{res.status_code}！"
+                else:
+                    logger.warn(f"{site} 模拟登录失败，无法打开网站")
+                    return False, f"模拟登录失败，无法打开网站！"
         except Exception as e:
-            logger.error(f"发送通知消息失败：{str(e)}")
+            logger.warn("%s 模拟登录失败：%s" % (site, str(e)))
+            traceback.print_exc()
+            return False, f"模拟登录失败：{str(e)}！"
 
     def stop_service(self):
         """
@@ -601,7 +862,8 @@ class SiteChatRoom(_PluginBase):
         site_id = event.event_data.get("site_id")
         config = self.get_config()
         if config:
-            self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
+            self._sign_sites = self.__remove_site_id(config.get("sign_sites") or [], site_id)
+            self._login_sites = self.__remove_site_id(config.get("login_sites") or [], site_id)
             # 保存配置
             self.__update_config()
 
