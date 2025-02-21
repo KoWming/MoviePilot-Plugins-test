@@ -527,7 +527,7 @@ class SiteChatRoom(_PluginBase):
             if response and response.status_code == 200:
                 logger.info(f"向 {site_info.get('name')} 发送消息 '{message}' 成功")
             else:
-                logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{res.status_code if res else '无响应'}")
+                logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{response.status_code if response else '无响应'}")
         except Exception as e:
             logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败：{str(e)}")
 
