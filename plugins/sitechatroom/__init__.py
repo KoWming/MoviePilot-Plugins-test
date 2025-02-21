@@ -573,17 +573,9 @@ class SiteChatRoom(_PluginBase):
         签到一个站点
         """
         logger.info("进入 signin_site 函数")
-        site_module = self.__build_class(site_info.get("url"))
         # 开始记时
         start_time = datetime.now()
-        if site_module and hasattr(site_module, "signin"):
-            try:
-                state, message = site_module().signin(site_info)
-            except Exception as e:
-                traceback.print_exc()
-                state, message = False, f"签到失败：{str(e)}"
-        else:
-            state, message = self.__signin_base(site_info)
+        state, message = self.__signin_base(site_info)
         # 统计
         seconds = (datetime.now() - start_time).seconds
         domain = StringUtils.get_url_domain(site_info.get('url'))
