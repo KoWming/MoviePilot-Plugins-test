@@ -447,7 +447,7 @@ class SiteChatRoom(_PluginBase):
                                   userid=event.event_data.get("user"))
 
             if self._chat_sites:
-                site_msgs = self.parse_site_messages("\n".join(self._sites_messages))
+                site_msgs = self.parse_site_messages(self._sites_messages)
                 self.__send_msgs(today=today, do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
             logger.info("send_site_messages 函数执行成功")
         except Exception as e:
