@@ -422,7 +422,7 @@ class SiteChatRoom(_PluginBase):
         pass
 
     @eventmanager.register(EventType.PluginAction)
-    def send_site_messages(self, event: Event = None):
+    def send_site_messages(self):
         """
         自动向站点发送消息
         """
