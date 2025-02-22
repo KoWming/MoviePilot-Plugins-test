@@ -88,7 +88,7 @@ class SiteChatRoom(_PluginBase):
             self._notify = config.get("notify")
             self._interval_cnt = config.get("interval_cnt") or 2
             self._chat_sites = config.get("chat_sites") or []
-            self._sites_messages = str(config.get("sites_messages")).split('\n')
+            self._sites_messages = config.get("sites_messages") or ""
 
 
             # 过滤掉已删除的站点
