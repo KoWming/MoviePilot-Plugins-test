@@ -1,33 +1,22 @@
-import re
+import pytz
 import time
 import requests
-import traceback
 from datetime import datetime, timedelta
-from multiprocessing.dummy import Pool as ThreadPool
-from multiprocessing.pool import ThreadPool
 from typing import Any, List, Dict, Tuple, Optional
 from urllib.parse import urljoin
 
-import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from ruamel.yaml import CommentedMap
 
-from app import schemas
 from app.chain.site import SiteChain
 from app.core.config import settings
 from app.core.event import EventManager, eventmanager, Event
 from app.db.site_oper import SiteOper
-from app.helper.browser import PlaywrightHelper
-from app.helper.cloudflare import under_challenge
-from app.helper.module import ModuleHelper
 from app.helper.sites import SitesHelper
 from app.log import logger
 from app.plugins import _PluginBase
 from app.schemas.types import EventType, NotificationType
-from app.utils.http import RequestUtils
-from app.utils.site import SiteUtils
-from app.utils.string import StringUtils
 from app.utils.timer import TimerUtils
 
 
@@ -105,10 +94,10 @@ class SiteChatRoom(_PluginBase):
             if self._onlyonce:
                 # 定时服务
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
-                logger.info("站点自动签到服务启动，立即运行一次")
+                logger.info("站点喊话服务启动，立即运行一次")
                 self._scheduler.add_job(func=self.send_site_messages, trigger='date',
                                         run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                        name="站点自动签到")
+                                        name="站点喊话服务")
 
                 # 关闭一次性开关
                 self._onlyonce = False
@@ -160,7 +149,7 @@ class SiteChatRoom(_PluginBase):
                 if str(self._cron).strip().count(" ") == 4:
                     return [{
                         "id": "AutoSignIn",
-                        "name": "站点自动签到服务",
+                        "name": "站点喊话服务",
                         "trigger": CronTrigger.from_crontab(self._cron),
                         "func": self.send_site_messages,
                         "kwargs": {}
@@ -181,7 +170,7 @@ class SiteChatRoom(_PluginBase):
                         if self._start_time and self._end_time:
                             return [{
                                 "id": "AutoSignIn",
-                                "name": "站点自动签到服务",
+                                "name": "站点喊话服务",
                                 "trigger": "interval",
                                 "func": self.send_site_messages,
                                 "kwargs": {
@@ -189,12 +178,12 @@ class SiteChatRoom(_PluginBase):
                                 }
                             }]
                         else:
-                            logger.error("站点自动签到服务启动失败，周期格式错误")
+                            logger.error("站点喊话服务启动失败，周期格式错误")
                     else:
                         # 默认0-24 按照周期运行
                         return [{
                             "id": "AutoSignIn",
-                            "name": "站点自动签到服务",
+                            "name": "站点喊话服务",
                             "trigger": "interval",
                             "func": self.send_site_messages,
                             "kwargs": {
@@ -214,7 +203,7 @@ class SiteChatRoom(_PluginBase):
             for trigger in triggers:
                 ret_jobs.append({
                     "id": f"AutoSignIn|{trigger.hour}:{trigger.minute}",
-                    "name": "站点自动签到服务",
+                    "name": "站点喊话服务",
                     "trigger": "cron",
                     "func": self.send_site_messages,
                     "kwargs": {
@@ -403,7 +392,7 @@ class SiteChatRoom(_PluginBase):
             }
         ], {
             "enabled": False,
-            "notify": True,
+            "notify": False,
             "cron": "",
             "onlyonce": False,
             "interval_cnt": 2,
@@ -426,14 +415,9 @@ class SiteChatRoom(_PluginBase):
         """
         自动向站点发送消息
         """
-        try:
-            if self._chat_sites:
-                site_msgs = self.parse_site_messages(self._sites_messages)
-                self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
-            
-            logger.info("send_site_messages 函数执行成功")
-        except Exception as e:
-            logger.error(f"send_site_messages 函数执行失败: {str(e)}")
+        if self._chat_sites:
+            site_msgs = self.parse_site_messages(self._sites_messages)
+            self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
 
     def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
         """
@@ -452,47 +436,41 @@ class SiteChatRoom(_PluginBase):
             return
 
         # 执行站点发送消息
-        logger.info("开始执行发送消息任务 ...")
-        success_sites = []
-        failed_sites = []
+        site_results = {}
         for site in do_sites:
             site_name = site.get("name")
             logger.info(f"开始处理站点: {site_name}")
             messages = site_msgs.get(site_name, [])
+            success_count = 0
+            failure_count = 0
             for i, message in enumerate(messages):
                 try:
                     self.send_msg_to_site(site, message)
-                    success_sites.append(site_name)
+                    success_count += 1
                 except Exception as e:
                     logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
-                    failed_sites.append(site_name)
+                    failure_count += 1
                 if i < len(messages) - 1:
                     logger.info(f"等待 {self._interval_cnt} 秒...")
                     time.sleep(self._interval_cnt)
+            site_results[site_name] = (success_count, failure_count)
 
         # 发送通知
-        if self._notify and (success_sites or failed_sites):
-            try:
-                success_message = "\n".join([f"【{site}】发送成功" for site in success_sites])
-                failed_message = "\n".join([f"【{site}】发送失败" for site in failed_sites])
-                total_sites = len(success_sites) + len(failed_sites)
-                success_count = len(success_sites)
-                failed_count = len(failed_sites)
+        if self._notify:
+            total_sites = len(do_sites)
+            notification_text = f"【执行喊话任务完成】:\n全部站点数量: {total_sites}\n"
 
-                self.post_message(
-                    mtype=NotificationType.SiteMessage,
-                    title="【执行喊话任务完成】:",
-                    text=f"全部站点数量: {total_sites} \n"
-                         f"发送成功数量: {success_count} \n"
-                         f"发送失败数量: {failed_count} \n"
-                         f"成功站点:\n{success_message}\n"
-                         f"失败站点:\n{failed_message}\n"
-                         f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
-                )
-            except Exception as e:
-                logger.error(f"发送通知时发生错误: {str(e)}")
+            for site_name, (success_count, failure_count) in site_results.items():
+                notification_text += f"【{site_name}】成功发送{success_count}条信息，失败{failure_count}条\n"
 
-        # 保存配置
+            notification_text += time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+
+            self.post_message(
+                mtype=NotificationType.SiteMessage,
+                title="【执行喊话任务完成】:",
+                text=notification_text
+            )
+
         self.__update_config()
 
     def send_msg_to_site(self, site_info: CommentedMap, message: str):
@@ -514,20 +492,19 @@ class SiteChatRoom(_PluginBase):
             'User-Agent': ua,
             'Cookie': site_cookie,
             'Referer': site_url
-        }
+            }
         params = {
             'shbox_text': message,
             'shout': '我喊',
             'sent': 'yes',
             'type': 'shoutbox'
-        }
+            }
 
         response = requests.get(send_url, params=params, headers=headers, proxies=proxies)
         if response and response.status_code == 200:
             logger.info(f"向 {site_info.get('name')} 发送消息 '{message}' 成功")
         else:
             logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{response.status_code if response else '无响应'}")
-
 
     def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
         """
@@ -566,7 +543,6 @@ class SiteChatRoom(_PluginBase):
             logger.error(f"解析站点消息时出现异常: {str(e)}")
         logger.info(f"站点消息解析完成，解析结果: {result}")
         return result
-
 
     def stop_service(self):
         """
@@ -610,4 +586,3 @@ class SiteChatRoom(_PluginBase):
                 self._enabled = False
 
         return do_sites
-    
