@@ -408,7 +408,7 @@ class SiteChatRoom(_PluginBase):
             "onlyonce": False,
             "interval_cnt": 2,
             "chat_sites": [],
-            "sites_messages": []
+            "sites_messages": ""
         }
 
     def __custom_sites(self) -> List[Any]:
