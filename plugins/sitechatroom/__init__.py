@@ -429,7 +429,7 @@ class SiteChatRoom(_PluginBase):
         try:
             if self._chat_sites:
                 site_msgs = self.parse_site_messages(self._sites_messages)
-                self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
+                self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
             logger.info("send_site_messages 函数执行成功")
         except Exception as e:
             logger.error(f"send_site_messages 函数执行失败: {str(e)}")
