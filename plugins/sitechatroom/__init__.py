@@ -422,16 +422,20 @@ class SiteChatRoom(_PluginBase):
         pass
 
     @eventmanager.register(EventType.PluginAction)
-    def send_site_messages(self):
+    def send_site_messages(self, event: Event = None):
         """
         自动向站点发送消息
         """
-        if self._chat_sites:
-            site_msgs = self.parse_site_messages(self._sites_messages)
-            self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
-        logger.info("send_site_messages 函数执行成功")
+        try:
+            if self._chat_sites:
+                site_msgs = self.parse_site_messages(self._sites_messages)
+                self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
+            
+            logger.info("send_site_messages 函数执行成功")
+        except Exception as e:
+            logger.error(f"send_site_messages 函数执行失败: {str(e)}")
 
-    def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]]):
+    def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
         """
         发送消息逻辑
         """
@@ -449,23 +453,40 @@ class SiteChatRoom(_PluginBase):
 
         # 执行站点发送消息
         logger.info("开始执行发送消息任务 ...")
+        success_sites = []
+        failed_sites = []
         for site in do_sites:
             site_name = site.get("name")
             logger.info(f"开始处理站点: {site_name}")
             messages = site_msgs.get(site_name, [])
             for i, message in enumerate(messages):
-                self.send_msg_to_site(site, message)
+                try:
+                    self.send_msg_to_site(site, message)
+                    success_sites.append(site_name)
+                except Exception as e:
+                    logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
+                    failed_sites.append(site_name)
                 if i < len(messages) - 1:
                     logger.info(f"等待 {self._interval_cnt} 秒...")
                     time.sleep(self._interval_cnt)
 
         # 发送通知
         if self._notify:
+            success_message = "\n".join([f"【{site}】发送成功" for site in success_sites])
+            failed_message = "\n".join([f"【{site}】发送失败" for site in failed_sites])
+            total_sites = len(success_sites) + len(failed_sites)
+            success_count = len(success_sites)
+            failed_count = len(failed_sites)
+
             self.post_message(
                 mtype=NotificationType.SiteMessage,
                 title="【执行喊话任务完成】:",
-                text=f"{site_name}：喊话成功！\n"
-                     f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+                text=f"全部站点数量: {total_sites} \n"
+                    f"发送成功数量: {success_count} \n"
+                    f"发送失败数量: {failed_count} \n"
+                    f"成功站点:\n{success_message}\n"
+                    f"失败站点:\n{failed_message}\n"
+                    f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
             )
 
         # 保存配置
