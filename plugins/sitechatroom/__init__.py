@@ -65,7 +65,7 @@ class SiteChatRoom(_PluginBase):
     _cron: str = ""
     _onlyonce: bool = False
     _notify: bool = False
-    _interval_cnt: int = 5
+    _interval_cnt: int = 2
     _chat_sites: list = []
     _sites_messages: list = []
     _start_time: int = None
