@@ -357,7 +357,8 @@ class GroupChatZone(_PluginBase):
                                             'model': 'sites_messages',
                                             'label': '发送消息',
                                             'rows': 10,
-                                            'placeholder': '每行格式：站点名称|消息内容1|消息内容2|...'
+                                            'placeholder': '每一行一个配置，配置方式：\n'
+                                                           '站点名称|消息内容1|消息内容2|消息内容3|...\n'
                                         }
                                     }
                                 ]
