@@ -20,13 +20,13 @@ from app.schemas.types import EventType, NotificationType
 from app.utils.timer import TimerUtils
 
 
-class SiteChatRoom(_PluginBase):
+class GroupChatZone(_PluginBase):
     # 插件名称
-    plugin_name = "站点聊天室"
+    plugin_name = "群聊区"
     # 插件描述
-    plugin_desc = "自动向多个站点发送预设消息。"
+    plugin_desc = "定时向多个站点发送预设消息(特定站点可获得奖励)。"
     # 插件图标
-    plugin_icon = "signin.png"
+    plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/GroupChat.png"
     # 插件版本
     plugin_version = "1.0"
     # 插件作者
@@ -34,7 +34,7 @@ class SiteChatRoom(_PluginBase):
     # 作者主页
     author_url = "https://github.com/KoWming"
     # 插件配置项ID前缀
-    plugin_config_prefix = "sitechatroom_"
+    plugin_config_prefix = "groupchatzone_"
     # 加载顺序
     plugin_order = 0
     # 可使用的用户级别
@@ -148,7 +148,7 @@ class SiteChatRoom(_PluginBase):
             try:
                 if str(self._cron).strip().count(" ") == 4:
                     return [{
-                        "id": "AutoSignIn",
+                        "id": "GroupChatZone",
                         "name": "站点喊话服务",
                         "trigger": CronTrigger.from_crontab(self._cron),
                         "func": self.send_site_messages,
@@ -169,7 +169,7 @@ class SiteChatRoom(_PluginBase):
                             self._end_time = int(times[1])
                         if self._start_time and self._end_time:
                             return [{
-                                "id": "AutoSignIn",
+                                "id": "GroupChatZone",
                                 "name": "站点喊话服务",
                                 "trigger": "interval",
                                 "func": self.send_site_messages,
@@ -182,7 +182,7 @@ class SiteChatRoom(_PluginBase):
                     else:
                         # 默认0-24 按照周期运行
                         return [{
-                            "id": "AutoSignIn",
+                            "id": "GroupChatZone",
                             "name": "站点喊话服务",
                             "trigger": "interval",
                             "func": self.send_site_messages,
@@ -202,7 +202,7 @@ class SiteChatRoom(_PluginBase):
             ret_jobs = []
             for trigger in triggers:
                 ret_jobs.append({
-                    "id": f"AutoSignIn|{trigger.hour}:{trigger.minute}",
+                    "id": f"GroupChatZone|{trigger.hour}:{trigger.minute}",
                     "name": "站点喊话服务",
                     "trigger": "cron",
                     "func": self.send_site_messages,
@@ -458,7 +458,7 @@ class SiteChatRoom(_PluginBase):
         # 发送通知
         if self._notify:
             total_sites = len(do_sites)
-            notification_text = f"【执行喊话任务完成】:\n全部站点数量: {total_sites}\n"
+            notification_text = f"全部站点数量: {total_sites}\n"
 
             for site_name, (success_count, failure_count) in site_results.items():
                 notification_text += f"【{site_name}】成功发送{success_count}条信息，失败{failure_count}条\n"
