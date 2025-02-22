@@ -542,34 +542,25 @@ class SiteChatRoom(_PluginBase):
         logger.info("开始解析输入的站点消息")
         result = {}
         try:
-            # 按行分割输入文本
-            lines = site_messages.strip().split('\n')
             # 获取所有选中的站点名称
             all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
             selected_site_names = [site.get("name") for site in all_sites if site.get("id") in self._chat_sites]
             logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
 
-            # 遍历每一行配置
-            for line in lines:
-                # 跳过空行
-                if not line.strip():
-                    continue
-                    
-                logger.debug(f"正在解析行: {line}")
-                # 按"|"分割配置
-                parts = line.split('|')
-                if len(parts) > 1:
-                    site_name = parts[0].strip()
-                    logger.debug(f"解析出的站点名称: {site_name}")
-                    # 检查站点是否在选中列表中
-                    if site_name in selected_site_names:
-                        # 获取消息内容并去除前后空格
-                        messages = [msg.strip() for msg in parts[1:] if msg.strip()]
-                        if messages:  # 如果有有效消息才添加
-                            result[site_name] = messages
-                            logger.info(f"成功解析站点 {site_name} 的消息: {messages}")
-                        else:
-                            logger.warn(f"站点 {site_name} 没有有效的消息内容")
+            # 按"|"分割配置
+            parts = str(site_messages).split('|')
+            if len(parts) > 1:
+                site_name = parts[0].strip()
+                logger.debug(f"解析出的站点名称: {site_name}")
+                # 检查站点是否在选中列表中
+                if site_name in selected_site_names:
+                    # 获取消息内容并去除前后空格
+                    messages = [msg.strip() for msg in parts[1:] if msg.strip()]
+                    if messages:  # 如果有有效消息才添加
+                        result[site_name] = messages
+                        logger.info(f"成功解析站点 {site_name} 的消息: {messages}")
+                    else:
+                        logger.warn(f"站点 {site_name} 没有有效的消息内容")
                 else:
                     logger.warn(f"配置行格式错误，缺少分隔符'|': {line}")
         except Exception as e:
