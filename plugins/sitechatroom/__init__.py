@@ -39,7 +39,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.0.6"
+    plugin_version = "2.0.3"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -88,6 +88,7 @@ class SiteChatRoom(_PluginBase):
             self._notify = config.get("notify")
             self._interval_cnt = config.get("interval_cnt") or 2
             self._chat_sites = config.get("chat_sites") or []
+            self._sites_messages = config.get("sites_messages")
             self._sites_messages = str(config.get("sites_messages")).split('\n')
 
 
@@ -615,4 +616,3 @@ class SiteChatRoom(_PluginBase):
                 self._enabled = False
 
         return do_sites
-    
