@@ -547,24 +547,26 @@ class SiteChatRoom(_PluginBase):
             selected_site_names = [site.get("name") for site in all_sites if site.get("id") in self._chat_sites]
             logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
 
-            # 按"|"分割配置
-            parts = str(site_messages).split("|")
-            if len(parts) > 1:
-                site_name = parts[0].strip()
-                logger.debug(f"解析出的站点名称: {site_name}")
-                # 检查站点是否在选中列表中
-                if site_name in selected_site_names:
-                    # 获取消息内容并去除前后空格
-                    messages = [msg.strip() for msg in parts[1:] if msg.strip()]
-                    if messages:  # 如果有有效消息才添加
-                        result[site_name] = messages
-                        logger.info(f"成功解析站点 {site_name} 的消息: {messages}")
+            # 按行分割配置
+            lines = site_messages.strip().split("\n")
+            for line in lines:
+                parts = line.split("|")
+                if len(parts) > 1:
+                    site_name = parts[0].strip()
+                    logger.debug(f"解析出的站点名称: {site_name}")
+                    # 检查站点是否在选中列表中
+                    if site_name in selected_site_names:
+                        # 获取消息内容并去除前后空格
+                        messages = [msg.strip() for msg in parts[1:] if msg.strip()]
+                        if messages:  # 如果有有效消息才添加
+                            result[site_name] = messages
+                            logger.info(f"成功解析站点 {site_name} 的消息: {messages}")
+                        else:
+                            logger.warn(f"站点 {site_name} 没有有效的消息内容")
                     else:
-                        logger.warn(f"站点 {site_name} 没有有效的消息内容")
+                        logger.warn(f"站点 {site_name} 不在选中列表中")
                 else:
-                    logger.warn(f"配置行格式错误，缺少分隔符")
-            else:
-                logger.warn(f"配置行格式错误，缺少分隔符")
+                    logger.warn(f"配置行格式错误，缺少分隔符: {line}")
         except Exception as e:
             logger.error(f"解析站点消息时出现异常: {str(e)}")
         logger.info(f"站点消息解析完成，解析结果: {result}")
