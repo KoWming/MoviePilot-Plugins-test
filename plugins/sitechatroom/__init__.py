@@ -548,7 +548,7 @@ class SiteChatRoom(_PluginBase):
             logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
 
             # 按行分割配置
-            lines = site_messages.strip().split("\n")
+            lines = site_messages.strip("|").split("\n")
             for line in lines:
                 parts = line.split("|")
                 if len(parts) > 1:
