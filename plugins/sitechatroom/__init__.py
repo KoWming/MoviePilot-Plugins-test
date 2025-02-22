@@ -615,3 +615,4 @@ class SiteChatRoom(_PluginBase):
                 self._enabled = False
 
         return do_sites
+    
