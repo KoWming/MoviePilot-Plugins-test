@@ -443,8 +443,8 @@ class SiteChatRoom(_PluginBase):
             if event:
                 logger.info("收到命令，开始向站点发送消息 ...")
                 self.post_message(channel=event.event_data.get("channel"),
-                                  title="开始向站点发送消息 ...",
-                                  userid=event.event_data.get("user"))
+                                title="开始向站点发送消息 ...",
+                                userid=event.event_data.get("user"))
 
             if self._chat_sites:
                 site_msgs = self.parse_site_messages(self._sites_messages)
@@ -548,7 +548,7 @@ class SiteChatRoom(_PluginBase):
             logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
 
             # 按行分割配置
-            lines = site_messages.strip("|")
+            lines = site_messages.strip().splitlines()  # 使用 splitlines() 来处理多行字符串
             for line in lines:
                 parts = line.split("|")
                 if len(parts) > 1:
