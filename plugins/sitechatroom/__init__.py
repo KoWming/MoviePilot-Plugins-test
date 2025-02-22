@@ -39,7 +39,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.0.3"
+    plugin_version = "1.0"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -472,22 +472,25 @@ class SiteChatRoom(_PluginBase):
 
         # 发送通知
         if self._notify and (success_sites or failed_sites):
-            success_message = "\n".join([f"【{site}】发送成功" for site in success_sites])
-            failed_message = "\n".join([f"【{site}】发送失败" for site in failed_sites])
-            total_sites = len(success_sites) + len(failed_sites)
-            success_count = len(success_sites)
-            failed_count = len(failed_sites)
+            try:
+                success_message = "\n".join([f"【{site}】发送成功" for site in success_sites])
+                failed_message = "\n".join([f"【{site}】发送失败" for site in failed_sites])
+                total_sites = len(success_sites) + len(failed_sites)
+                success_count = len(success_sites)
+                failed_count = len(failed_sites)
 
-            self.post_message(
-                mtype=NotificationType.SiteMessage,
-                title="【执行喊话任务完成】:",
-                text=f"全部站点数量: {total_sites} \n"
-                    f"发送成功数量: {success_count} \n"
-                    f"发送失败数量: {failed_count} \n"
-                    f"成功站点:\n{success_message}\n"
-                    f"失败站点:\n{failed_message}\n"
-                    f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
-            )
+                self.post_message(
+                    mtype=NotificationType.SiteMessage,
+                    title="【执行喊话任务完成】:",
+                    text=f"全部站点数量: {total_sites} \n"
+                         f"发送成功数量: {success_count} \n"
+                         f"发送失败数量: {failed_count} \n"
+                         f"成功站点:\n{success_message}\n"
+                         f"失败站点:\n{failed_message}\n"
+                         f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+                )
+            except Exception as e:
+                logger.error(f"发送通知时发生错误: {str(e)}")
 
         # 保存配置
         self.__update_config()
