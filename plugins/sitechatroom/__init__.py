@@ -562,7 +562,7 @@ class SiteChatRoom(_PluginBase):
                     else:
                         logger.warn(f"站点 {site_name} 没有有效的消息内容")
                 else:
-                    logger.warn(f"配置行格式错误，缺少分隔符'|': {line}")
+                    logger.warn(f"配置行格式错误，缺少分隔符'|'")
         except Exception as e:
             logger.error(f"解析站点消息时出现异常: {str(e)}")
         logger.info(f"站点消息解析完成，解析结果: {result}")
