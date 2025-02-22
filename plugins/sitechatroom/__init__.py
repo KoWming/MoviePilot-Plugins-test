@@ -39,7 +39,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.0.5"
+    plugin_version = "2.0.6"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -67,7 +67,7 @@ class SiteChatRoom(_PluginBase):
     _notify: bool = False
     _interval_cnt: int = 5
     _chat_sites: list = []
-    _sites_messages: str = ""
+    _sites_messages: list = []
     _start_time: int = None
     _end_time: int = None
 
@@ -88,7 +88,7 @@ class SiteChatRoom(_PluginBase):
             self._notify = config.get("notify")
             self._interval_cnt = config.get("interval_cnt") or 2
             self._chat_sites = config.get("chat_sites") or []
-            self._sites_messages = config.get("sites_messages")
+            self._sites_messages = str(config.get("sites_messages")).split('\n')
 
 
             # 过滤掉已删除的站点
@@ -408,7 +408,7 @@ class SiteChatRoom(_PluginBase):
             "onlyonce": False,
             "interval_cnt": 2,
             "chat_sites": [],
-            "sites_messages": ""
+            "sites_messages": []
         }
 
     def __custom_sites(self) -> List[Any]:
