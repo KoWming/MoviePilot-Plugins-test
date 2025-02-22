@@ -426,76 +426,45 @@ class SiteChatRoom(_PluginBase):
         """
         自动向站点发送消息
         """
-        try:
-            logger.info("进入 send_site_messages 函数")
-            if event:
-                event_data = event.event_data
-                if not event_data or event_data.get("action") != "site_send_messages":
-                    return
-            # 日期
-            today = datetime.today()
-            if self._start_time and self._end_time:
-                current_hour = int(datetime.today().hour)
-                if current_hour < self._start_time or current_hour > self._end_time:
-                    logger.error(
-                        f"当前时间 {current_hour} 不在 {self._start_time}-{self._end_time} 范围内，暂不执行任务")
-                    return
-            if event:
-                logger.info("收到命令，开始向站点发送消息 ...")
-                self.post_message(channel=event.event_data.get("channel"),
-                                title="开始向站点发送消息 ...",
-                                userid=event.event_data.get("user"))
+        if self._chat_sites:
+            site_msgs = self.parse_site_messages(self._sites_messages)
+            self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
 
-            if self._chat_sites:
-                site_msgs = self.parse_site_messages(self._sites_messages)
-                self.__send_msgs(today=today, do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
-            logger.info("send_site_messages 函数执行成功")
-        except Exception as e:
-            logger.error(f"send_site_messages 函数执行失败: {str(e)}")
-
-    def __send_msgs(self, today: datetime, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
+    def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]]):
         """
         发送消息逻辑
         """
-        try:
-            logger.info("进入 __send_msgs 函数")
-            # 查询所有站点
-            all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
-            # 过滤掉没有选中的站点
-            if do_sites:
-                do_sites = [site for site in all_sites if site.get("id") in do_sites]
-            else:
-                do_sites = all_sites
+        # 查询所有站点
+        all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
+        # 过滤掉没有选中的站点
+        if do_sites:
+            do_sites = [site for site in all_sites if site.get("id") in do_sites]
+        else:
+            do_sites = all_sites
 
-            if not do_sites:
-                logger.info("没有需要发送消息的站点")
-                return
+        if not do_sites:
+            logger.info("没有需要发送消息的站点")
+            return
 
-            # 执行发送消息
-            logger.info("开始执行发送消息任务 ...")
-            for site in do_sites:
-                site_name = site.get("name")
-                logger.info(f"开始处理站点: {site_name}")
-                messages = site_msgs.get(site_name, [])
-                for i, message in enumerate(messages):
-                    self.send_msg_to_site(site, message)
-                    if i < len(messages) - 1:
-                        logger.info(f"等待 {self._interval_cnt} 秒...")
-                        time.sleep(self._interval_cnt)
+        # 执行发送消息
+        logger.info("开始执行发送消息任务 ...")
+        for site in do_sites:
+            site_name = site.get("name")
+            logger.info(f"开始处理站点: {site_name}")
+            messages = site_msgs.get(site_name, [])
+            for i, message in enumerate(messages):
+                self.send_msg_to_site(site, message)
+                if i < len(messages) - 1:
+                    logger.info(f"等待 {self._interval_cnt} 秒...")
+                    time.sleep(self._interval_cnt)
 
-            # 保存配置
-            self.__update_config()
-        except Exception as e:
-            logger.error(f"发送消息过程中出现异常: {str(e)}")
-
-
-
+        # 保存配置
+        self.__update_config()
 
     def send_msg_to_site(self, site_info: CommentedMap, message: str):
         """
-        向一个站点发送消息
+        解析站点信息，构建消息发送请求
         """
-        logger.info(f"进入 send_msg_to_site 函数，准备向 {site_info.get('name')} 发送消息")
         # 站点信息
         site_name = site_info.get("name") 
         site_url = site_info.get("url")
@@ -506,31 +475,24 @@ class SiteChatRoom(_PluginBase):
             logger.error(f"站点 {site_name} 缺少必要信息，无法发送消息")
             return
 
-        try:
-            send_url = urljoin(site_url, "/shoutbox.php")
-            headers = {
-                'User-Agent': ua,
-                'Cookie': site_cookie,
-                'Referer': site_url
-            }
-            params = {
-                'shbox_text': message,
-                'shout': '我喊',
-                'sent': 'yes',
-                'type': 'shoutbox'
-            }
-            try:
-                response = requests.get(send_url, params=params, headers=headers, proxies=proxies)
-            except Exception as req_err:
-                logger.warn(f"发送请求失败：{str(req_err)}")
-                return
+        send_url = urljoin(site_url, "/shoutbox.php")
+        headers = {
+            'User-Agent': ua,
+            'Cookie': site_cookie,
+            'Referer': site_url
+        }
+        params = {
+            'shbox_text': message,
+            'shout': '我喊',
+            'sent': 'yes',
+            'type': 'shoutbox'
+        }
 
-            if response and response.status_code == 200:
-                logger.info(f"向 {site_info.get('name')} 发送消息 '{message}' 成功")
-            else:
-                logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{response.status_code if response else '无响应'}")
-        except Exception as e:
-            logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败：{str(e)}")
+        response = requests.get(send_url, params=params, headers=headers, proxies=proxies)
+        if response and response.status_code == 200:
+            logger.info(f"向 {site_info.get('name')} 发送消息 '{message}' 成功")
+        else:
+            logger.warn(f"向 {site_info.get('name')} 发送消息 '{message}' 失败，状态码：{response.status_code if response else '无响应'}")
 
 
     def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
@@ -539,7 +501,6 @@ class SiteChatRoom(_PluginBase):
         :param site_messages: 多行文本输入
         :return: 字典，键为站点名称，值为该站点的消息
         """
-        logger.info("开始解析输入的站点消息")
         result = {}
         try:
             # 获取所有选中的站点名称
