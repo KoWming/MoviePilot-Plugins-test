@@ -39,7 +39,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.0.3"
+    plugin_version = "2.0.4"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -133,7 +133,7 @@ class SiteChatRoom(_PluginBase):
                 "onlyonce": self._onlyonce,
                 "interval_cnt": self._interval_cnt,
                 "chat_sites": self._chat_sites,
-                "sites_messages": self._sites_messages
+                "sites_messages": str(self._sites_messages)
             }
         )
 
