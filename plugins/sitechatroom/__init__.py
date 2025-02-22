@@ -471,7 +471,7 @@ class SiteChatRoom(_PluginBase):
                     time.sleep(self._interval_cnt)
 
         # 发送通知
-        if self._notify:
+        if self._notify and (success_sites or failed_sites):
             success_message = "\n".join([f"【{site}】发送成功" for site in success_sites])
             failed_message = "\n".join([f"【{site}】发送失败" for site in failed_sites])
             total_sites = len(success_sites) + len(failed_sites)
