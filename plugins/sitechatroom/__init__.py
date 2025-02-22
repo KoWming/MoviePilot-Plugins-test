@@ -39,7 +39,7 @@ class SiteChatRoom(_PluginBase):
     # 插件图标
     plugin_icon = "signin.png"
     # 插件版本
-    plugin_version = "2.0.2"
+    plugin_version = "2.0.3"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -548,7 +548,7 @@ class SiteChatRoom(_PluginBase):
             logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
 
             # 按"|"分割配置
-            parts = str(site_messages).split('|')
+            parts = str(site_messages).split("|")
             if len(parts) > 1:
                 site_name = parts[0].strip()
                 logger.debug(f"解析出的站点名称: {site_name}")
@@ -562,7 +562,7 @@ class SiteChatRoom(_PluginBase):
                     else:
                         logger.warn(f"站点 {site_name} 没有有效的消息内容")
                 else:
-                    logger.warn(f"配置行格式错误，缺少分隔符'|'")
+                    logger.warn(f"配置行格式错误，缺少分隔符"|"")
         except Exception as e:
             logger.error(f"解析站点消息时出现异常: {str(e)}")
         logger.info(f"站点消息解析完成，解析结果: {result}")
