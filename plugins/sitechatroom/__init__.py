@@ -426,13 +426,10 @@ class SiteChatRoom(_PluginBase):
         """
         自动向站点发送消息
         """
-        try:
-            if self._chat_sites:
-                site_msgs = self.parse_site_messages(self._sites_messages)
-                self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
-            logger.info("send_site_messages 函数执行成功")
-        except Exception as e:
-            logger.error(f"send_site_messages 函数执行失败: {str(e)}")
+        if self._chat_sites:
+            site_msgs = self.parse_site_messages(self._sites_messages)
+            self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
+        logger.info("send_site_messages 函数执行成功")
 
     def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]]):
         """
@@ -450,7 +447,7 @@ class SiteChatRoom(_PluginBase):
             logger.info("没有需要发送消息的站点")
             return
 
-        # 执行发送消息
+        # 执行站点发送消息
         logger.info("开始执行发送消息任务 ...")
         for site in do_sites:
             site_name = site.get("name")
@@ -461,6 +458,15 @@ class SiteChatRoom(_PluginBase):
                 if i < len(messages) - 1:
                     logger.info(f"等待 {self._interval_cnt} 秒...")
                     time.sleep(self._interval_cnt)
+
+        # 发送通知
+        if self._notify:
+            self.post_message(
+                mtype=NotificationType.SiteMessage,
+                title="【执行喊话任务完成】:",
+                text=f"{site_name}：喊话成功！\n"
+                     f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+            )
 
         # 保存配置
         self.__update_config()
