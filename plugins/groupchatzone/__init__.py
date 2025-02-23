@@ -478,7 +478,7 @@ class GroupChatZone(_PluginBase):
             failure_count = 0
             for i, message in enumerate(messages):
                 try:
-                    self.send_msg_to_site(site, message)
+                    self.send_message_to_site(site, message)
                     success_count += 1
                 except Exception as e:
                     logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
