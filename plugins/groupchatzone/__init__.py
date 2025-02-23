@@ -28,7 +28,7 @@ class GroupChatZone(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/GroupChat.png"
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -504,13 +504,23 @@ class GroupChatZone(_PluginBase):
                 text=notification_text
             )
 
+        # 检查是否所有消息都发送成功
+        all_successful = all(success_count == len(messages) for success_count, messages in zip(
+            (success_count for success_count, _ in site_results.values()),
+            (messages for _, messages in site_msgs.items())
+        ))
+
+        if all_successful:
+            logger.info("所有站点的消息发送成功")
+
         self.__update_config()
 
-    def send_msg_to_site(self, site_info: CommentedMap, message: str):
+    def send_message_to_site(self, site_info: CommentedMap, message: str):
         """
-        解析站点信息，构建消息发送请求
+        发送消息到指定站点
+        :param site_info: 站点信息
+        :param message: 要发送的消息
         """
-        # 站点信息
         site_name = site_info.get("name")
         site_url = site_info.get("url")
         site_cookie = site_info.get("cookie")
@@ -540,6 +550,10 @@ class GroupChatZone(_PluginBase):
                 logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
             else:
                 logger.warn(f"向 {site_name} 发送消息 '{message}' 失败，状态码：{response.status_code}")
+        except requests.Timeout:
+            logger.error(f"向 {site_name} 发送消息 '{message}' 超时")
+        except requests.ConnectionError:
+            logger.error(f"向 {site_name} 发送消息 '{message}' 连接错误")
         except requests.RequestException as e:
             logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {str(e)}")
 
