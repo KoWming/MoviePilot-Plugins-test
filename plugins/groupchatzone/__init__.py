@@ -438,12 +438,10 @@ class GroupChatZone(_PluginBase):
                 parts = line.split("|")
                 if len(parts) > 1:
                     site_name = parts[0].strip()
-                    logger.debug(f"解析出的站点名称: {site_name}")
                     if site_name in selected_site_names:
                         messages = [msg.strip() for msg in parts[1:] if msg.strip()]
                         if messages:
                             result[site_name] = messages
-                            logger.info(f"成功解析站点 {site_name} 的消息: {messages}")
                         else:
                             logger.warn(f"站点 {site_name} 没有有效的消息内容")
                     else:
