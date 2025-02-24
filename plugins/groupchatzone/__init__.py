@@ -82,7 +82,6 @@ class GroupChatZone(_PluginBase):
             self._chat_sites = config.get("chat_sites") or []
             self._sites_messages = config.get("sites_messages") or ""
 
-
             # 过滤掉已删除的站点
             all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in self.__custom_sites()]
             self._chat_sites = [site_id for site_id in all_sites if site_id in self._chat_sites]
@@ -98,9 +97,13 @@ class GroupChatZone(_PluginBase):
                 # 定时服务
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info("站点喊话服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.send_site_messages, trigger='date',
-                                        run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                        name="站点喊话服务")
+                try:
+                    self._scheduler.add_job(func=self.send_site_messages, trigger='date',
+                                            run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
+                                            name="站点喊话服务")
+                    logger.debug("任务已成功添加到调度器")
+                except Exception as e:
+                    logger.error(f"添加任务到调度器失败: {str(e)}")
 
                 # 关闭一次性开关
                 self._onlyonce = False
@@ -110,7 +113,16 @@ class GroupChatZone(_PluginBase):
                 # 启动任务
                 if self._scheduler.get_jobs():
                     self._scheduler.print_jobs()
+                    logger.debug("启动调度器")
                     self._scheduler.start()
+                else:
+                    logger.warning("调度器中没有任务")
+
+            # 检查调度器状态
+            if self._scheduler and self._scheduler.running:
+                logger.debug("调度器正在运行")
+            else:
+                logger.error("调度器未启动")
 
     def get_state(self) -> bool:
         return self._enabled
