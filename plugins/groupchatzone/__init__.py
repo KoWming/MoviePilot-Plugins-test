@@ -62,7 +62,7 @@ class GroupChatZone(_PluginBase):
     _start_time: int = None
     _end_time: int = None
 
-    async def _async_init_plugin(self, config: dict = None):
+    def init_plugin(self, config: dict = None):
         self.sites = SitesHelper()
         self.siteoper = SiteOper()
         self.event = EventManager()
@@ -97,7 +97,7 @@ class GroupChatZone(_PluginBase):
                 # 定时服务
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info("站点喊话服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.send_site_messages, trigger='date',
+                self._scheduler.add_job(func=asyncio.run(self.send_site_messages), trigger='date',
                                         run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
                                         name="站点喊话服务")
 
@@ -110,10 +110,6 @@ class GroupChatZone(_PluginBase):
                 if self._scheduler.get_jobs():
                     self._scheduler.print_jobs()
                     self._scheduler.start()
-
-    def init_plugin(self, config: dict = None):
-        # 使用 asyncio.run 来运行异步初始化方法
-        asyncio.run(self._async_init_plugin(config))
 
     def get_state(self) -> bool:
         return self._enabled
