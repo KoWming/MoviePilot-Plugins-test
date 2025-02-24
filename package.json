@@ -18,7 +18,7 @@
         "name": "群聊区",
         "description": "定时向多个站点发送预设消息(特定站点可获得奖励)。",
         "labels": "站点",
-        "version": "1.2",
+        "version": "1.2.1",
         "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/GroupChat.png",
         "author": "KoWming",
         "level": 2,
