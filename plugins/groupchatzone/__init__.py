@@ -62,7 +62,7 @@ class GroupChatZone(_PluginBase):
     _start_time: int = None
     _end_time: int = None
 
-    def init_plugin(self, config: dict = None):
+    async def _async_init_plugin(self, config: dict = None):
         self.sites = SitesHelper()
         self.siteoper = SiteOper()
         self.event = EventManager()
@@ -110,6 +110,10 @@ class GroupChatZone(_PluginBase):
                 if self._scheduler.get_jobs():
                     self._scheduler.print_jobs()
                     self._scheduler.start()
+
+    def init_plugin(self, config: dict = None):
+        # 使用 asyncio.run 来运行异步初始化方法
+        asyncio.run(self._async_init_plugin(config))
 
     def get_state(self) -> bool:
         return self._enabled
@@ -586,12 +590,9 @@ class GroupChatZone(_PluginBase):
                 logger.info(f"解析完成，准备发送消息到以下站点名称: {selected_site_names}")
 
                 # 调用 __send_msgs_async 方法
-                logger.debug("开始调用 __send_msgs_async 方法")
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.create_task(self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event))
-                else:
-                    loop.run_until_complete(self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event))
+            if self._chat_sites:
+                site_msgs = self.parse_site_messages(self._sites_messages)
+                self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
                 logger.debug("__send_msgs_async 方法已调用")
             else:
                 logger.info("没有选中的站点，不执行发送操作")
