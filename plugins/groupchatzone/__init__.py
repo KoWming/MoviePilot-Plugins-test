@@ -591,6 +591,13 @@ class GroupChatZone(_PluginBase):
                 logger.info("开始解析站点消息")
                 site_msgs = self.parse_site_messages(self._sites_messages)
                 logger.info(f"解析完成，准备发送消息到以下站点: {self._chat_sites}")
+
+                # 将站点 ID 转换为站点名称
+                all_sites = self.get_all_sites()
+                site_id_to_name = {site.get("id"): site.get("name") for site in all_sites}
+                selected_site_names = [site_id_to_name.get(site_id) for site_id in self._chat_sites if site_id_to_name.get(site_id)]
+
+                logger.info(f"解析完成，准备发送消息到以下站点名称: {selected_site_names}")
                 self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
             else:
                 logger.info("没有选中的站点，不执行发送操作")
