@@ -1,6 +1,5 @@
 import pytz
 import time
-import requests
 import aiohttp
 import asyncio
 from datetime import datetime, timedelta
@@ -481,8 +480,12 @@ class GroupChatZone(_PluginBase):
                 raise
 
 
+    @lru_cache(maxsize=128)
+    def get_all_sites(self):
+        return [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
+
     async def __send_msgs_async(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
-        all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
+        all_sites = self.get_all_sites()
         do_sites = [site for site in all_sites if site.get("id") in do_sites] if do_sites else all_sites
 
         if not do_sites:
