@@ -449,36 +449,38 @@ class GroupChatZone(_PluginBase):
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     async def send_message_to_site_async(self, site_info: CommentedMap, message: str):
-        site_name = site_info.get("name")
-        site_url = site_info.get("url")
-        site_cookie = site_info.get("cookie")
-        ua = site_info.get("ua")
-        proxies = settings.PROXY if site_info.get("proxy") else None
+        try:
+            site_name = site_info.get("name")
+            site_url = site_info.get("url")
+            site_cookie = site_info.get("cookie")
+            ua = site_info.get("ua")
+            proxies = settings.PROXY if site_info.get("proxy") else None
 
-        send_url = urljoin(site_url, "/shoutbox.php")
-        headers = {
-            'User-Agent': ua,
-            'Cookie': site_cookie,
-            'Referer': site_url
-        }
-        params = {
-            'shbox_text': message,
-            'shout': '我喊',
-            'sent': 'yes',
-            'type': 'shoutbox'
-        }
+            send_url = urljoin(site_url, "/shoutbox.php")
+            headers = {
+                'User-Agent': ua,
+                'Cookie': site_cookie,
+                'Referer': site_url
+            }
+            params = {
+                'shbox_text': message,
+                'shout': '我喊',
+                'sent': 'yes',
+                'type': 'shoutbox'
+            }
 
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get(send_url, params=params, headers=headers, proxy=proxies, timeout=10) as response:
-                    if response.status == 200:
-                        logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
-                    else:
-                        logger.warn(f"向 {site_name} 发送消息 '{message}' 失败，状态码：{response.status}")
-            except aiohttp.ClientError as e:
-                logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {str(e)}")
-                raise
-
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.get(send_url, params=params, headers=headers, proxy=proxies, timeout=10) as response:
+                        if response.status == 200:
+                            logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
+                        else:
+                            logger.warn(f"向 {site_name} 发送消息 '{message}' 失败，状态码：{response.status}")
+                except aiohttp.ClientError as e:
+                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {str(e)}")
+                    raise
+        except Exception as e:
+            logger.error(f"执行 send_message_to_site_async 时发生未知错误: {str(e)}")
 
     @lru_cache(maxsize=128)
     def get_all_sites(self):
