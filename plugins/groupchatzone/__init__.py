@@ -5,7 +5,6 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional
 from urllib.parse import urljoin
-from functools import lru_cache
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -31,7 +30,7 @@ class GroupChatZone(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/GroupChat.png"
     # 插件版本
-    plugin_version = "1.2.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -82,6 +81,7 @@ class GroupChatZone(_PluginBase):
             self._chat_sites = config.get("chat_sites") or []
             self._sites_messages = config.get("sites_messages") or ""
 
+
             # 过滤掉已删除的站点
             all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in self.__custom_sites()]
             self._chat_sites = [site_id for site_id in all_sites if site_id in self._chat_sites]
@@ -97,13 +97,9 @@ class GroupChatZone(_PluginBase):
                 # 定时服务
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info("站点喊话服务启动，立即运行一次")
-                try:
-                    self._scheduler.add_job(func=self.send_site_messages, trigger='date',
-                                            run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                            name="站点喊话服务")
-                    logger.debug("任务已成功添加到调度器")
-                except Exception as e:
-                    logger.error(f"添加任务到调度器失败: {str(e)}")
+                self._scheduler.add_job(func=self.send_site_messages, trigger='date',
+                                        run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
+                                        name="站点喊话服务")
 
                 # 关闭一次性开关
                 self._onlyonce = False
@@ -113,16 +109,7 @@ class GroupChatZone(_PluginBase):
                 # 启动任务
                 if self._scheduler.get_jobs():
                     self._scheduler.print_jobs()
-                    logger.debug("启动调度器")
                     self._scheduler.start()
-                else:
-                    logger.warning("调度器中没有任务")
-
-            # 检查调度器状态
-            if self._scheduler and self._scheduler.running:
-                logger.debug("调度器正在运行")
-            else:
-                logger.error("调度器未启动")
 
     def get_state(self) -> bool:
         return self._enabled
@@ -432,6 +419,7 @@ class GroupChatZone(_PluginBase):
         :param site_messages: 多行文本输入
         :return: 字典，键为站点名称，值为该站点的消息
         """
+        logger.info("开始解析站点消息")
         result = {}
         try:
             # 获取所有选中的站点名称
@@ -461,6 +449,7 @@ class GroupChatZone(_PluginBase):
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     async def send_message_to_site_async(self, site_info: CommentedMap, message: str):
+        logger.info(f"开始向站点 {site_info.get('name')} 发送消息")
         try:
             site_name = site_info.get("name")
             site_url = site_info.get("url")
@@ -494,13 +483,9 @@ class GroupChatZone(_PluginBase):
         except Exception as e:
             logger.error(f"执行 send_message_to_site_async 时发生未知错误: {str(e)}")
 
-    @lru_cache(maxsize=128)
-    def get_all_sites(self):
-        return [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
-
     async def __send_msgs_async(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
+        logger.debug("__send_msgs_async 方法开始执行")
         try:
-            logger.debug("__send_msgs_async 方法开始执行")
             all_sites = self.get_all_sites()
             do_sites = [site for site in all_sites if site.get("id") in do_sites] if do_sites else all_sites
 
@@ -584,8 +569,10 @@ class GroupChatZone(_PluginBase):
             self.__update_config()
         except Exception as e:
             logger.error(f"执行 __send_msgs_async 时发生错误: {str(e)}")
+
     @eventmanager.register(EventType.PluginAction)
-    def send_site_messages(self, event: Event = None):
+    async def send_site_messages(self, event: Event = None):
+        logger.info("开始执行 send_site_messages 方法")
         try:
             if self._chat_sites:
                 logger.info("开始解析站点消息")
