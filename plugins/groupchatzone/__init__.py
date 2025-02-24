@@ -585,13 +585,13 @@ class GroupChatZone(_PluginBase):
             logger.error(f"执行 __send_msgs_async 时发生错误: {str(e)}")
 
     @eventmanager.register(EventType.PluginAction)
-    async def send_site_messages(self, event: Event = None):
+    def send_site_messages(self, event: Event = None):
         try:
             if self._chat_sites:
                 logger.info("开始解析站点消息")
                 site_msgs = self.parse_site_messages(self._sites_messages)
                 logger.info(f"解析完成，准备发送消息到以下站点: {self._chat_sites}")
-                await self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
+                self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
             else:
                 logger.info("没有选中的站点，不执行发送操作")
         except Exception as e:
