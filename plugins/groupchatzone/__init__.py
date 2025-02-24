@@ -485,90 +485,103 @@ class GroupChatZone(_PluginBase):
         return [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
 
     async def __send_msgs_async(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
-        all_sites = self.get_all_sites()
-        do_sites = [site for site in all_sites if site.get("id") in do_sites] if do_sites else all_sites
+        try:
+            all_sites = self.get_all_sites()
+            do_sites = [site for site in all_sites if site.get("id") in do_sites] if do_sites else all_sites
 
-        if not do_sites:
-            logger.info("没有需要发送消息的站点")
-            return
+            if not do_sites:
+                logger.info("没有需要发送消息的站点")
+                return
 
-        site_results = {}
-        queue = asyncio.Queue()
-        semaphore = asyncio.Semaphore(5)  # 控制并发量为5
+            site_results = {}
+            queue = asyncio.Queue()
+            semaphore = asyncio.Semaphore(5)  # 控制并发量为5
 
-        async def worker():
-            while True:
-                site, message = await queue.get()
-                async with semaphore:
-                    try:
-                        await self.send_message_to_site_async(site, message)
-                        queue.task_done()
-                    except Exception as e:
-                        logger.error(f"向站点 {site.get('name')} 发送消息 '{message}' 失败: {str(e)}")
-                        queue.task_done()
+            async def worker():
+                while True:
+                    site, message = await queue.get()
+                    async with semaphore:
+                        try:
+                            await self.send_message_to_site_async(site, message)
+                            queue.task_done()
+                            logger.debug(f"成功发送消息 '{message}' 到站点 {site.get('name')}")
+                        except Exception as e:
+                            logger.error(f"向站点 {site.get('name')} 发送消息 '{message}' 失败: {str(e)}")
+                            queue.task_done()
 
-        # 创建多个worker
-        workers = [asyncio.create_task(worker()) for _ in range(5)]
+            # 创建多个worker
+            workers = [asyncio.create_task(worker()) for _ in range(5)]
 
-        for site in do_sites:
-            site_name = site.get("name")
-            logger.info(f"开始处理站点: {site_name}")
-            messages = site_msgs.get(site_name, [])
-            success_count = 0
-            failure_count = 0
+            for site in do_sites:
+                site_name = site.get("name")
+                logger.info(f"开始处理站点: {site_name}")
+                messages = site_msgs.get(site_name, [])
+                success_count = 0
+                failure_count = 0
 
-            for i, message in enumerate(messages):
-                await queue.put((site, message))
+                for i, message in enumerate(messages):
+                    await queue.put((site, message))
+                    logger.debug(f"将消息 '{message}' 放入队列，等待发送到站点 {site_name}")
 
-                if i < len(messages) - 1:
-                    logger.info(f"等待 {self._interval_cnt} 秒...")
-                    await asyncio.sleep(self._interval_cnt)
+                    if i < len(messages) - 1:
+                        logger.info(f"等待 {self._interval_cnt} 秒...")
+                        await asyncio.sleep(self._interval_cnt)
 
-            site_results[site_name] = (success_count, failure_count)
+                site_results[site_name] = (success_count, failure_count)
 
-        # 等待所有任务完成
-        await queue.join()
+            # 等待所有任务完成
+            await queue.join()
+            logger.debug("所有消息发送任务已完成")
 
-        # 关闭worker
-        for worker in workers:
-            worker.cancel()
-            try:
-                await worker
-            except asyncio.CancelledError:
-                pass
+            # 关闭worker
+            for worker in workers:
+                worker.cancel()
+                try:
+                    await worker
+                except asyncio.CancelledError:
+                    pass
 
-        # 发送通知
-        if self._notify:
-            total_sites = len(do_sites)
-            notification_text = f"全部站点数量: {total_sites}\n"
-            notification_text += "\n".join(
-                f"【{site_name}】成功发送{success_count}条信息，失败{failure_count}条"
-                for site_name, (success_count, failure_count) in site_results.items()
-            )
-            notification_text += f"\n{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+            # 发送通知
+            if self._notify:
+                total_sites = len(do_sites)
+                notification_text = f"全部站点数量: {total_sites}\n"
+                notification_text += "\n".join(
+                    f"【{site_name}】成功发送{success_count}条信息，失败{failure_count}条"
+                    for site_name, (success_count, failure_count) in site_results.items()
+                )
+                notification_text += f"\n{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
 
-            self.post_message(
-                mtype=NotificationType.SiteMessage,
-                title="【执行喊话任务完成】:",
-                text=notification_text
-            )
+                self.post_message(
+                    mtype=NotificationType.SiteMessage,
+                    title="【执行喊话任务完成】:",
+                    text=notification_text
+                )
 
-        # 检查是否所有消息都发送成功
-        all_successful = all(success_count == len(messages) for success_count, messages in zip(
-            (success_count for success_count, _ in site_results.values()),
-            (messages for _, messages in site_msgs.items())
-        ))
+            # 检查是否所有消息都发送成功
+            all_successful = all(success_count == len(messages) for success_count, messages in zip(
+                (success_count for success_count, _ in site_results.values()),
+                (messages for _, messages in site_msgs.items())
+            ))
 
-        if all_successful:
-            logger.info("所有站点的消息发送成功")
+            if all_successful:
+                logger.info("所有站点的消息发送成功")
 
-        self.__update_config()
+            self.__update_config()
+        except Exception as e:
+            logger.error(f"执行 __send_msgs_async 时发生错误: {str(e)}")
 
     @eventmanager.register(EventType.PluginAction)
     async def send_site_messages(self, event: Event = None):
-        if self._chat_sites:
-            site_msgs = self.parse_site_messages(self._sites_messages)
-            await self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
+        try:
+            if self._chat_sites:
+                logger.info("开始解析站点消息")
+                site_msgs = self.parse_site_messages(self._sites_messages)
+                logger.info(f"解析完成，准备发送消息到以下站点: {self._chat_sites}")
+                await self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
+            else:
+                logger.info("没有选中的站点，不执行发送操作")
+        except Exception as e:
+            logger.error(f"执行 send_site_messages 时发生错误: {str(e)}")
 
     def stop_service(self):
         """
