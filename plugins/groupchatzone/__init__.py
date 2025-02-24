@@ -1,10 +1,14 @@
 import pytz
 import time
 import requests
+import aiohttp
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional
 from urllib.parse import urljoin
+from functools import lru_cache
 
+from tenacity import retry, stop_after_attempt, wait_exponential
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from ruamel.yaml import CommentedMap
@@ -411,15 +415,6 @@ class GroupChatZone(_PluginBase):
     def get_page(self) -> List[dict]:
         pass
 
-    @eventmanager.register(EventType.PluginAction)
-    def send_site_messages(self, event: Event = None):
-        """
-        自动向站点发送消息
-        """
-        if self._chat_sites:
-            site_msgs = self.parse_site_messages(self._sites_messages)
-            self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
-
     def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
         """
         解析输入的站点消息
@@ -453,38 +448,91 @@ class GroupChatZone(_PluginBase):
         logger.info(f"站点消息解析完成，解析结果: {result}")
         return result
 
-    def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
-        """
-        发送消息逻辑
-        """
-        # 查询所有站点
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    async def send_message_to_site_async(self, site_info: CommentedMap, message: str):
+        site_name = site_info.get("name")
+        site_url = site_info.get("url")
+        site_cookie = site_info.get("cookie")
+        ua = site_info.get("ua")
+        proxies = settings.PROXY if site_info.get("proxy") else None
+
+        send_url = urljoin(site_url, "/shoutbox.php")
+        headers = {
+            'User-Agent': ua,
+            'Cookie': site_cookie,
+            'Referer': site_url
+        }
+        params = {
+            'shbox_text': message,
+            'shout': '我喊',
+            'sent': 'yes',
+            'type': 'shoutbox'
+        }
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(send_url, params=params, headers=headers, proxy=proxies, timeout=10) as response:
+                    if response.status == 200:
+                        logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
+                    else:
+                        logger.warn(f"向 {site_name} 发送消息 '{message}' 失败，状态码：{response.status}")
+            except aiohttp.ClientError as e:
+                logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {str(e)}")
+                raise
+
+
+    async def __send_msgs_async(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
         all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
-        # 过滤掉没有选中的站点
         do_sites = [site for site in all_sites if site.get("id") in do_sites] if do_sites else all_sites
 
         if not do_sites:
             logger.info("没有需要发送消息的站点")
             return
 
-        # 执行站点发送消息
         site_results = {}
+        queue = asyncio.Queue()
+        semaphore = asyncio.Semaphore(5)  # 控制并发量为5
+
+        async def worker():
+            while True:
+                site, message = await queue.get()
+                async with semaphore:
+                    try:
+                        await self.send_message_to_site_async(site, message)
+                        queue.task_done()
+                    except Exception as e:
+                        logger.error(f"向站点 {site.get('name')} 发送消息 '{message}' 失败: {str(e)}")
+                        queue.task_done()
+
+        # 创建多个worker
+        workers = [asyncio.create_task(worker()) for _ in range(5)]
+
         for site in do_sites:
             site_name = site.get("name")
             logger.info(f"开始处理站点: {site_name}")
             messages = site_msgs.get(site_name, [])
             success_count = 0
             failure_count = 0
+
             for i, message in enumerate(messages):
-                try:
-                    self.send_message_to_site(site, message)
-                    success_count += 1
-                except Exception as e:
-                    logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
-                    failure_count += 1
+                await queue.put((site, message))
+
                 if i < len(messages) - 1:
                     logger.info(f"等待 {self._interval_cnt} 秒...")
-                    time.sleep(self._interval_cnt)
+                    await asyncio.sleep(self._interval_cnt)
+
             site_results[site_name] = (success_count, failure_count)
+
+        # 等待所有任务完成
+        await queue.join()
+
+        # 关闭worker
+        for worker in workers:
+            worker.cancel()
+            try:
+                await worker
+            except asyncio.CancelledError:
+                pass
 
         # 发送通知
         if self._notify:
@@ -513,47 +561,11 @@ class GroupChatZone(_PluginBase):
 
         self.__update_config()
 
-    def send_message_to_site(self, site_info: CommentedMap, message: str):
-        """
-        发送消息到指定站点
-        :param site_info: 站点信息
-        :param message: 要发送的消息
-        """
-        site_name = site_info.get("name")
-        site_url = site_info.get("url")
-        site_cookie = site_info.get("cookie")
-        ua = site_info.get("ua")
-        proxies = settings.PROXY if site_info.get("proxy") else None
-
-        if not all([site_name, site_url, site_cookie, ua]):
-            logger.error(f"站点 {site_name} 缺少必要信息，无法发送消息")
-            return
-
-        send_url = urljoin(site_url, "/shoutbox.php")
-        headers = {
-            'User-Agent': ua,
-            'Cookie': site_cookie,
-            'Referer': site_url
-        }
-        params = {
-            'shbox_text': message,
-            'shout': '我喊',
-            'sent': 'yes',
-            'type': 'shoutbox'
-        }
-
-        try:
-            response = requests.get(send_url, params=params, headers=headers, proxies=proxies, timeout=10)
-            if response.status_code == 200:
-                logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
-            else:
-                logger.warn(f"向 {site_name} 发送消息 '{message}' 失败，状态码：{response.status_code}")
-        except requests.Timeout:
-            logger.error(f"向 {site_name} 发送消息 '{message}' 超时")
-        except requests.ConnectionError:
-            logger.error(f"向 {site_name} 发送消息 '{message}' 连接错误")
-        except requests.RequestException as e:
-            logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {str(e)}")
+    @eventmanager.register(EventType.PluginAction)
+    async def send_site_messages(self, event: Event = None):
+        if self._chat_sites:
+            site_msgs = self.parse_site_messages(self._sites_messages)
+            await self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
 
     def stop_service(self):
         """
