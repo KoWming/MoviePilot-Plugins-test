@@ -600,7 +600,11 @@ class GroupChatZone(_PluginBase):
 
                 # 调用 __send_msgs_async 方法
                 logger.debug("开始调用 __send_msgs_async 方法")
-                asyncio.create_task(self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event))
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event))
+                else:
+                    loop.run_until_complete(self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event))
                 logger.debug("__send_msgs_async 方法已调用")
             else:
                 logger.info("没有选中的站点，不执行发送操作")
