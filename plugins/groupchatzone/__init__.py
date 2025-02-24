@@ -500,6 +500,7 @@ class GroupChatZone(_PluginBase):
 
     async def __send_msgs_async(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
         try:
+            logger.debug("__send_msgs_async 方法开始执行")
             all_sites = self.get_all_sites()
             do_sites = [site for site in all_sites if site.get("id") in do_sites] if do_sites else all_sites
 
@@ -583,14 +584,12 @@ class GroupChatZone(_PluginBase):
             self.__update_config()
         except Exception as e:
             logger.error(f"执行 __send_msgs_async 时发生错误: {str(e)}")
-
     @eventmanager.register(EventType.PluginAction)
     def send_site_messages(self, event: Event = None):
         try:
             if self._chat_sites:
                 logger.info("开始解析站点消息")
                 site_msgs = self.parse_site_messages(self._sites_messages)
-                logger.info(f"解析完成，准备发送消息到以下站点: {self._chat_sites}")
 
                 # 将站点 ID 转换为站点名称
                 all_sites = self.get_all_sites()
@@ -598,7 +597,11 @@ class GroupChatZone(_PluginBase):
                 selected_site_names = [site_id_to_name.get(site_id) for site_id in self._chat_sites if site_id_to_name.get(site_id)]
 
                 logger.info(f"解析完成，准备发送消息到以下站点名称: {selected_site_names}")
-                self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
+
+                # 调用 __send_msgs_async 方法
+                logger.debug("开始调用 __send_msgs_async 方法")
+                asyncio.create_task(self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event))
+                logger.debug("__send_msgs_async 方法已调用")
             else:
                 logger.info("没有选中的站点，不执行发送操作")
         except Exception as e:
