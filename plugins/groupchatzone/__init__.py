@@ -584,7 +584,7 @@ class GroupChatZone(_PluginBase):
             total=3,  # 总重试次数
             backoff_factor=1,  # 重试间隔时间因子
             status_forcelist=[403, 404, 500, 502, 503, 504],  # 需要重试的状态码
-            method_whitelist=["GET"]  # 需要重试的HTTP方法
+            method_whitelist=["GET"],  # 需要重试的HTTP方法
             raise_on_status=False  # 不在重试时抛出异常，手动处理
         )
         adapter = HTTPAdapter(max_retries=retries)
