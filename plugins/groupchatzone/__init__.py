@@ -30,7 +30,7 @@ class GroupChatZone(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/GroupChat.png"
     # 插件版本
-    plugin_version = "1.2.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -50,9 +50,6 @@ class GroupChatZone(_PluginBase):
     event: EventManager = None
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
-
-    # 缓存的站点信息
-    _cached_sites: Dict[int, Any] = {}
 
     # 配置属性
     _enabled: bool = False
@@ -88,10 +85,6 @@ class GroupChatZone(_PluginBase):
             # 过滤掉已删除的站点
             all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in self.__custom_sites()]
             self._chat_sites = [site_id for site_id in all_sites if site_id in self._chat_sites]
-
-            # 初始化站点缓存
-            self._cached_sites = {site.id: site for site in self.sites.get_indexers() if not site.get("public")}
-            self._cached_sites.update({site.get("id"): site for site in self.__custom_sites()})
 
             # 保存配置
             self.__update_config()
@@ -388,6 +381,30 @@ class GroupChatZone(_PluginBase):
                                         'props': {
                                             'type': 'info',
                                             'variant': 'tonal',
+                                            'text': '配置注意事项：'
+                                                    '1、注意定时任务设置，避免每分钟执行一次导致频繁请求。'
+                                                    '2、消息发送执行间隔(秒)不能小于0，也不建议设置过大。1~5秒即可，设置过大可能导致线程运行时间过长。'
+                                                    '3、如配置有全局代理，会默认调用全局代理执行。'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VAlert',
+                                        'props': {
+                                            'type': 'info',
+                                            'variant': 'tonal',
                                             'text': '执行周期支持：'
                                                     '1、5位cron表达式；'
                                                     '2、配置间隔（小时），如2.3/9-23（9-23点之间每隔2.3小时执行一次）；'
@@ -420,50 +437,6 @@ class GroupChatZone(_PluginBase):
     def get_page(self) -> List[dict]:
         pass
 
-    @eventmanager.register(EventType.SiteAdded)
-    def site_added(self, event):
-        """
-        添加选中的对应站点
-        """
-        site_info = event.event_data.get("site_info")
-        if site_info:
-            site_id = site_info.get("id")
-            # 更新缓存
-            self._cached_sites[site_id] = site_info
-            # 保存配置
-            self.__update_config()
-    @eventmanager.register(EventType.SiteDeleted)
-    def site_deleted(self, event):
-        """
-        删除选中的对应站点
-        """
-        site_id = event.event_data.get("site_id")
-        config = self.get_config()
-        if config:
-            self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
-            # 更新缓存
-            if site_id in self._cached_sites:
-                del self._cached_sites[site_id]
-            # 保存配置
-            self.__update_config()
-
-    def __remove_site_id(self, do_sites, site_id):
-        if do_sites:
-            if isinstance(do_sites, str):
-                do_sites = [do_sites]
-
-            # 删除对应站点
-            if site_id:
-                do_sites = [site for site in do_sites if int(site) != int(site_id)]
-            else:
-                # 清空
-                do_sites = []
-
-            # 若无站点，则停止
-            if len(do_sites) == 0:
-                self._enabled = False
-
-        return do_sites
     @eventmanager.register(EventType.PluginAction)
     def send_site_messages(self, event: Event = None):
         """
@@ -510,8 +483,10 @@ class GroupChatZone(_PluginBase):
         """
         发送消息逻辑
         """
-        # 使用缓存中的站点信息
-        do_sites = [self._cached_sites[site_id] for site_id in do_sites if site_id in self._cached_sites]
+        # 查询所有站点
+        all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
+        # 过滤掉没有选中的站点
+        do_sites = [site for site in all_sites if site.get("id") in do_sites] if do_sites else all_sites
 
         if not do_sites:
             logger.info("没有需要发送消息的站点")
@@ -645,3 +620,33 @@ class GroupChatZone(_PluginBase):
                 self._scheduler = None
         except Exception as e:
             logger.error("退出插件失败：%s" % str(e))
+
+    @eventmanager.register(EventType.SiteDeleted)
+    def site_deleted(self, event):
+        """
+        删除对应站点选中
+        """
+        site_id = event.event_data.get("site_id")
+        config = self.get_config()
+        if config:
+            self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
+            # 保存配置
+            self.__update_config()
+
+    def __remove_site_id(self, do_sites, site_id):
+        if do_sites:
+            if isinstance(do_sites, str):
+                do_sites = [do_sites]
+
+            # 删除对应站点
+            if site_id:
+                do_sites = [site for site in do_sites if int(site) != int(site_id)]
+            else:
+                # 清空
+                do_sites = []
+
+            # 若无站点，则停止
+            if len(do_sites) == 0:
+                self._enabled = False
+
+        return do_sites
