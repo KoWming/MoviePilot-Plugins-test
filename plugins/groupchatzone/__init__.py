@@ -1,12 +1,12 @@
 import pytz
 import time
-import aiohttp
-import asyncio
+import requests
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional
 from urllib.parse import urljoin
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
-from tenacity import retry, stop_after_attempt, wait_exponential
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from ruamel.yaml import CommentedMap
@@ -51,6 +51,9 @@ class GroupChatZone(_PluginBase):
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
 
+    # 缓存的站点信息
+    _cached_sites: Dict[int, Any] = {}
+
     # 配置属性
     _enabled: bool = False
     _cron: str = ""
@@ -77,14 +80,18 @@ class GroupChatZone(_PluginBase):
             self._cron = config.get("cron")
             self._onlyonce = config.get("onlyonce")
             self._notify = config.get("notify")
-            self._interval_cnt = config.get("interval_cnt") or 2
-            self._chat_sites = config.get("chat_sites") or []
-            self._sites_messages = config.get("sites_messages") or ""
+            self._interval_cnt = config.get("interval_cnt", 2)
+            self._chat_sites = config.get("chat_sites", [])
+            self._sites_messages = config.get("sites_messages", "")
 
 
             # 过滤掉已删除的站点
             all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in self.__custom_sites()]
             self._chat_sites = [site_id for site_id in all_sites if site_id in self._chat_sites]
+
+            # 初始化站点缓存
+            self._cached_sites = {site.id: site for site in self.sites.get_indexers() if not site.get("public")}
+            self._cached_sites.update({site.get("id"): site for site in self.__custom_sites()})
 
             # 保存配置
             self.__update_config()
@@ -97,7 +104,7 @@ class GroupChatZone(_PluginBase):
                 # 定时服务
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info("站点喊话服务启动，立即运行一次")
-                self._scheduler.add_job(func=asyncio.run(self.send_site_messages), trigger='date',
+                self._scheduler.add_job(func=self.send_site_messages, trigger='date',
                                         run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
                                         name="站点喊话服务")
 
@@ -358,7 +365,7 @@ class GroupChatZone(_PluginBase):
                                         'props': {
                                             'model': 'sites_messages',
                                             'label': '发送消息',
-                                            'rows': 10,
+                                            'rows': 8,
                                             'placeholder': '每一行一个配置，配置方式：\n'
                                                            '站点名称|消息内容1|消息内容2|消息内容3|...\n'
                                         }
@@ -413,13 +420,47 @@ class GroupChatZone(_PluginBase):
     def get_page(self) -> List[dict]:
         pass
 
+    @eventmanager.register(EventType.SiteAdded)
+    def site_added(self, event):
+        """
+        添加选中的对应站点
+        """
+        site_info = event.event_data.get("site_info")
+        if site_info:
+            site_id = site_info.get("id")
+            # 更新缓存
+            self._cached_sites[site_id] = site_info
+            # 保存配置
+            self.__update_config()
+    @eventmanager.register(EventType.SiteDeleted)
+    def site_deleted(self, event):
+        """
+        删除选中的对应站点
+        """
+        site_id = event.event_data.get("site_id")
+        config = self.get_config()
+        if config:
+            self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
+            # 更新缓存
+            if site_id in self._cached_sites:
+                del self._cached_sites[site_id]
+            # 保存配置
+            self.__update_config()
+    @eventmanager.register(EventType.PluginAction)
+    def send_site_messages(self, event: Event = None):
+        """
+        自动向站点发送消息
+        """
+        if self._chat_sites:
+            site_msgs = self.parse_site_messages(self._sites_messages)
+            self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
+
     def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
         """
         解析输入的站点消息
         :param site_messages: 多行文本输入
         :return: 字典，键为站点名称，值为该站点的消息
         """
-        logger.info("开始解析站点消息")
         result = {}
         try:
             # 获取所有选中的站点名称
@@ -447,153 +488,132 @@ class GroupChatZone(_PluginBase):
         logger.info(f"站点消息解析完成，解析结果: {result}")
         return result
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    async def send_message_to_site_async(self, site_info: CommentedMap, message: str):
-        logger.info(f"开始向站点 {site_info.get('name')} 发送消息")
-        try:
-            site_name = site_info.get("name")
-            site_url = site_info.get("url")
-            site_cookie = site_info.get("cookie")
-            ua = site_info.get("ua")
-            proxies = settings.PROXY if site_info.get("proxy") else None
+    def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
+        """
+        发送消息逻辑
+        """
+        # 使用缓存中的站点信息
+        do_sites = [self._cached_sites[site_id] for site_id in do_sites if site_id in self._cached_sites]
 
-            send_url = urljoin(site_url, "/shoutbox.php")
-            headers = {
-                'User-Agent': ua,
-                'Cookie': site_cookie,
-                'Referer': site_url
-            }
-            params = {
-                'shbox_text': message,
-                'shout': '我喊',
-                'sent': 'yes',
-                'type': 'shoutbox'
-            }
+        if not do_sites:
+            logger.info("没有需要发送消息的站点")
+            return
 
-            async with aiohttp.ClientSession() as session:
+        # 执行站点发送消息
+        site_results = {}
+        for site in do_sites:
+            site_name = site.get("name")
+            logger.info(f"开始处理站点: {site_name}")
+            messages = site_msgs.get(site_name, [])
+            success_count = 0
+            failure_count = 0
+            failed_messages = []
+
+            for i, message in enumerate(messages):
                 try:
-                    async with session.get(send_url, params=params, headers=headers, proxy=proxies, timeout=10) as response:
-                        if response.status == 200:
-                            logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
-                        else:
-                            logger.warn(f"向 {site_name} 发送消息 '{message}' 失败，状态码：{response.status}")
-                except aiohttp.ClientError as e:
-                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {str(e)}")
-                    raise
-        except Exception as e:
-            logger.error(f"执行 send_message_to_site_async 时发生未知错误: {str(e)}")
+                    self.send_message_to_site(site, message)
+                    success_count += 1
+                except Exception as e:
+                    logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
+                    failure_count += 1
+                    failed_messages.append(message)
+                if i < len(messages) - 1:
+                    logger.info(f"等待 {self._interval_cnt} 秒...")
+                    time.sleep(self._interval_cnt)
+            
+            site_results[site_name] = {
+                "success_count": success_count,
+                "failure_count": failure_count,
+                "failed_messages": failed_messages
+            }
 
-    async def __send_msgs_async(self, do_sites: list, site_msgs: Dict[str, List[str]], event: Event = None):
-        logger.debug("__send_msgs_async 方法开始执行")
-        try:
-            all_sites = self.get_all_sites()
-            do_sites = [site for site in all_sites if site.get("id") in do_sites] if do_sites else all_sites
+        # 发送通知
+        if self._notify:
+            total_sites = len(do_sites)
+            notification_text = f"全部站点数量: {total_sites}\n"
+            for site_name, result in site_results.items():
+                success_count = result["success_count"]
+                failure_count = result["failure_count"]
+                failed_messages = result["failed_messages"]
+                notification_text += f"【{site_name}】成功发送{success_count}条信息，失败{failure_count}条\n"
+                if failed_messages:
+                    notification_text += f"失败的消息: {', '.join(failed_messages)}\n"
+            notification_text += f"\n{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
 
-            if not do_sites:
-                logger.info("没有需要发送消息的站点")
-                return
+            self.post_message(
+                mtype=NotificationType.SiteMessage,
+                title="【执行喊话任务完成】:",
+                text=notification_text
+            )
 
-            site_results = {}
-            queue = asyncio.Queue()
-            semaphore = asyncio.Semaphore(5)  # 控制并发量为5
+        # 检查是否所有消息都发送成功
+        all_successful = all(result["success_count"] == len(messages) for site_name, messages in site_msgs.items() for result in site_results.values() if site_name in site_msgs)
+        if all_successful:
+            logger.info("所有站点的消息发送成功。")
+        else:
+            logger.info("部分消息发送失败！！！")
 
-            async def worker():
-                while True:
-                    site, message = await queue.get()
-                    async with semaphore:
-                        try:
-                            await self.send_message_to_site_async(site, message)
-                            queue.task_done()
-                            logger.debug(f"成功发送消息 '{message}' 到站点 {site.get('name')}")
-                        except Exception as e:
-                            logger.error(f"向站点 {site.get('name')} 发送消息 '{message}' 失败: {str(e)}")
-                            queue.task_done()
+        self.__update_config()
 
-            # 创建多个worker
-            workers = [asyncio.create_task(worker()) for _ in range(5)]
+    def send_message_to_site(self, site_info: CommentedMap, message: str):
+        site_name = site_info.get("name", "").strip()
+        site_url = site_info.get("url", "").strip()
+        site_cookie = site_info.get("cookie", "").strip()
+        ua = site_info.get("ua", "").strip()
+        proxies = settings.PROXY if site_info.get("proxy") else None
 
-            for site in do_sites:
-                site_name = site.get("name")
-                logger.info(f"开始处理站点: {site_name}")
-                messages = site_msgs.get(site_name, [])
-                success_count = 0
-                failure_count = 0
+        if not all([site_name, site_url, site_cookie, ua]):
+            logger.error(f"站点 {site_name} 缺少必要信息，无法发送消息")
+            return
 
-                for i, message in enumerate(messages):
-                    await queue.put((site, message))
-                    logger.debug(f"将消息 '{message}' 放入队列，等待发送到站点 {site_name}")
+        send_url = urljoin(site_url, "/shoutbox.php")
+        headers = {
+            'User-Agent': ua,
+            'Cookie': site_cookie,
+            'Referer': site_url
+        }
+        params = {
+            'shbox_text': message,
+            'shout': '我喊',
+            'sent': 'yes',
+            'type': 'shoutbox'
+        }
 
-                    if i < len(messages) - 1:
-                        logger.info(f"等待 {self._interval_cnt} 秒...")
-                        await asyncio.sleep(self._interval_cnt)
+        # 配置重试策略
+        retries = Retry(
+            total=3,  # 总重试次数
+            backoff_factor=1,  # 重试间隔时间因子
+            status_forcelist=[403, 404, 500, 502, 503, 504],  # 需要重试的状态码
+            method_whitelist=["GET"]  # 需要重试的HTTP方法
+            raise_on_status=False  # 不在重试时抛出异常，手动处理
+        )
+        adapter = HTTPAdapter(max_retries=retries)
 
-                site_results[site_name] = (success_count, failure_count)
-
-            # 等待所有任务完成
-            await queue.join()
-            logger.debug("所有消息发送任务已完成")
-
-            # 关闭worker
-            for worker in workers:
-                worker.cancel()
+        # 使用 Session 对象复，创建会话对象
+        with requests.Session() as session:
+            session.headers.update(headers)
+            session.proxies = proxies
+            session.mount('https://', adapter)
+            
+            attempt = 0
+            while attempt < retries.total:
                 try:
-                    await worker
-                except asyncio.CancelledError:
-                    pass
-
-            # 发送通知
-            if self._notify:
-                total_sites = len(do_sites)
-                notification_text = f"全部站点数量: {total_sites}\n"
-                notification_text += "\n".join(
-                    f"【{site_name}】成功发送{success_count}条信息，失败{failure_count}条"
-                    for site_name, (success_count, failure_count) in site_results.items()
-                )
-                notification_text += f"\n{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
-
-                self.post_message(
-                    mtype=NotificationType.SiteMessage,
-                    title="【执行喊话任务完成】:",
-                    text=notification_text
-                )
-
-            # 检查是否所有消息都发送成功
-            all_successful = all(success_count == len(messages) for success_count, messages in zip(
-                (success_count for success_count, _ in site_results.values()),
-                (messages for _, messages in site_msgs.items())
-            ))
-
-            if all_successful:
-                logger.info("所有站点的消息发送成功")
-
-            self.__update_config()
-        except Exception as e:
-            logger.error(f"执行 __send_msgs_async 时发生错误: {str(e)}")
-
-    @eventmanager.register(EventType.PluginAction)
-    async def send_site_messages(self, event: Event = None):
-        logger.info("开始执行 send_site_messages 方法")
-        try:
-            if self._chat_sites:
-                logger.info("开始解析站点消息")
-                site_msgs = self.parse_site_messages(self._sites_messages)
-
-                # 将站点 ID 转换为站点名称
-                all_sites = self.get_all_sites()
-                site_id_to_name = {site.get("id"): site.get("name") for site in all_sites}
-                selected_site_names = [site_id_to_name.get(site_id) for site_id in self._chat_sites if site_id_to_name.get(site_id)]
-
-                logger.info(f"解析完成，准备发送消息到以下站点名称: {selected_site_names}")
-
-                # 调用 __send_msgs_async 方法
-            if self._chat_sites:
-                site_msgs = self.parse_site_messages(self._sites_messages)
-                self.__send_msgs_async(do_sites=self._chat_sites, site_msgs=site_msgs, event=event)
-                logger.debug("__send_msgs_async 方法已调用")
-            else:
-                logger.info("没有选中的站点，不执行发送操作")
-        except Exception as e:
-            logger.error(f"执行 send_site_messages 时发生错误: {str(e)}")
+                    response = session.get(send_url, params=params, timeout=(3.05, 10))
+                    response.raise_for_status()  # 自动处理 4xx/5xx 状态码
+                    logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
+                    break
+                except requests.exceptions.HTTPError as http_err:
+                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，HTTP 错误: {http_err}")
+                except requests.exceptions.RequestException as req_err:
+                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {req_err}")
+                
+                attempt += 1
+                if attempt < retries.total:
+                    backoff_time = retries.get_backoff_time(attempt)
+                    logger.info(f"重试 {attempt}/{retries.total}，将在 {backoff_time} 秒后重试...")
+                    time.sleep(backoff_time)
+                else:
+                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，重试次数已达上限")
 
     def stop_service(self):
         """
