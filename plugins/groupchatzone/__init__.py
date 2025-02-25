@@ -540,7 +540,7 @@ class GroupChatZone(_PluginBase):
             )
 
         # 检查是否所有消息都发送成功
-        all_successful = all(result["success_count"] == len(messages) for site_name, messages in site_msgs.items() for result in site_results.values() if site_name in site_msgs)
+        all_successful = all(result["success_count"] == len(messages) for site_name, messages in site_msgs.items() if (result := site_results.get(site_name)))
         if all_successful:
             logger.info("所有站点的消息发送成功。")
         else:
