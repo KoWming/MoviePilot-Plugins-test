@@ -446,6 +446,24 @@ class GroupChatZone(_PluginBase):
                 del self._cached_sites[site_id]
             # 保存配置
             self.__update_config()
+
+    def __remove_site_id(self, do_sites, site_id):
+        if do_sites:
+            if isinstance(do_sites, str):
+                do_sites = [do_sites]
+
+            # 删除对应站点
+            if site_id:
+                do_sites = [site for site in do_sites if int(site) != int(site_id)]
+            else:
+                # 清空
+                do_sites = []
+
+            # 若无站点，则停止
+            if len(do_sites) == 0:
+                self._enabled = False
+
+        return do_sites
     @eventmanager.register(EventType.PluginAction)
     def send_site_messages(self, event: Event = None):
         """
@@ -627,33 +645,3 @@ class GroupChatZone(_PluginBase):
                 self._scheduler = None
         except Exception as e:
             logger.error("退出插件失败：%s" % str(e))
-
-    @eventmanager.register(EventType.SiteDeleted)
-    def site_deleted(self, event):
-        """
-        删除对应站点选中
-        """
-        site_id = event.event_data.get("site_id")
-        config = self.get_config()
-        if config:
-            self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
-            # 保存配置
-            self.__update_config()
-
-    def __remove_site_id(self, do_sites, site_id):
-        if do_sites:
-            if isinstance(do_sites, str):
-                do_sites = [do_sites]
-
-            # 删除对应站点
-            if site_id:
-                do_sites = [site for site in do_sites if int(site) != int(site_id)]
-            else:
-                # 清空
-                do_sites = []
-
-            # 若无站点，则停止
-            if len(do_sites) == 0:
-                self._enabled = False
-
-        return do_sites
