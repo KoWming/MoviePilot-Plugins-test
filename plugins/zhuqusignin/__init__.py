@@ -270,7 +270,7 @@ class ZhuquSignin(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 2.4
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -286,7 +286,7 @@ class ZhuquSignin(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 2.4
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -302,7 +302,7 @@ class ZhuquSignin(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 2.4
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -318,7 +318,7 @@ class ZhuquSignin(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 2.4
+                                    'md': 3
                                 },
                                 'content': [
                                     {
@@ -334,7 +334,7 @@ class ZhuquSignin(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 2.4
+                                    'md': 3
                                 },
                                 'content': [
                                     {
@@ -355,7 +355,7 @@ class ZhuquSignin(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 12
                                 },
                                 'content': [
                                     {
