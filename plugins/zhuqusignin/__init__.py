@@ -115,7 +115,7 @@ class ZhuquSignin(_PluginBase):
             logger.error("请求错误！")
             return
 
-        # 获取userid
+        # 获取username
         data = res.json().get('data', {})
         username = data.get('username', res.text)
         if not username:
@@ -129,8 +129,7 @@ class ZhuquSignin(_PluginBase):
         bonus, min_level = self.get_user_info(headers=headers, csrfToken=csrfToken)
         if bonus is not None and min_level is not None:
             rich_text_report = self.generate_rich_text_report(results, bonus, min_level)
-            print(rich_text_report)  
-            self._notify(rich_text_report)
+            self.post_message(rich_text_report)
         else:
             logger.error("获取用户信息失败，无法生成报告。")
 
