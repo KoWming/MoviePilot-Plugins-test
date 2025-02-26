@@ -28,6 +28,19 @@
             "v1.1": "优化代码结构，避免逻辑重复。",
             "v1.0": "初始版本。"
         }
+    },
+    "ZhuquSignin": {
+        "name": "朱雀助手",
+        "description": "技能释放、一键升级、签到、获取签到记录。",
+        "labels": "站点",
+        "version": "1.0",
+        "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/GroupChat.png",
+        "author": "KoWming",
+        "level": 2,
+        "v2": true,
+        "history": {
+            "v1.0": "初始版本。"
+        }
     }
 }
 
