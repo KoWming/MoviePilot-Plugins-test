@@ -91,7 +91,7 @@ class ZhuquSignin(_PluginBase):
                 self._scheduler.print_jobs()
                 self._scheduler.start()
 
-    def __signin(self, headers):
+    def __signin(self):
         """
         执行请求任务
         """
@@ -125,8 +125,8 @@ class ZhuquSignin(_PluginBase):
         logger.info(f"获取username成功。 {username}")
 
         # 开始执行
-        results = self.train_genshin_character(level=self._target_level, csrfToken=csrfToken, headers=headers)
-        bonus, min_level = self.get_user_info(headers=headers, csrfToken=csrfToken)
+        results = self.train_genshin_character()
+        bonus, min_level = self.get_user_info()
         if bonus is not None and min_level is not None:
             rich_text_report = self.generate_rich_text_report(results, bonus, min_level)
             self.post_message(rich_text_report)
