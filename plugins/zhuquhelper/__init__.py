@@ -21,13 +21,13 @@ class ZhuqueHelper(_PluginBase):
     # 插件描述
     plugin_desc = "技能释放、一键升级、获取执行记录。"
     # 插件图标
-    plugin_icon = "invites.png"
+    plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/zhuquehelper.png"
     # 插件版本
     plugin_version = "1.0"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
-    author_url = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/zhuquehelper.png"
+    author_url = "https://github.com/KoWming"
     # 插件配置项ID前缀
     plugin_config_prefix = "zhuquehelper_"
     # 加载顺序
