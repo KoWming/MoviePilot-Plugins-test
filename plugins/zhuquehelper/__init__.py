@@ -155,13 +155,11 @@ class ZhuqueHelper(_PluginBase):
                     "min_level": min_level,
                     "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0),
                 }
-                logger.info(f"开始保记录... {sign_dict}")
 
                 # 读取历史记录
                 history = self.get_data('sign_dict') or []
                 history.append(sign_dict)
                 self.save_data(key="sign_dict", value=history)
-                logger.info(f"保存记录完成")
 
                 # 发送通知
                 if self._notify:
