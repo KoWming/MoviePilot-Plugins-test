@@ -1,7 +1,6 @@
 import json
-import os
-import logging
-import requests
+import re
+import time
 from datetime import datetime, timedelta
 
 import pytz
@@ -13,22 +12,24 @@ from app.plugins import _PluginBase
 from typing import Any, List, Dict, Tuple, Optional
 from app.log import logger
 from app.schemas import NotificationType
+from app.utils.http import RequestUtils
 
-class ZhuqueSignin(_PluginBase):
+
+class ZhuquSignin(_PluginBase):
     # 插件名称
     plugin_name = "朱雀助手"
     # 插件描述
-    plugin_desc = "朱雀论坛签到与角色训练。"
+    plugin_desc = "技能释放、一键升级、签到、获取签到记录"
     # 插件图标
-    plugin_icon = "zhuque.png"
+    plugin_icon = "invites.png"
     # 插件版本
-    plugin_version = "1.0.0"
+    plugin_version = "1.0"
     # 插件作者
     plugin_author = "thsrite"
     # 作者主页
     author_url = "https://github.com/thsrite"
     # 插件配置项ID前缀
-    plugin_config_prefix = "zhuquesignin_"
+    plugin_config_prefix = "zhuqusignin_"
     # 加载顺序
     plugin_order = 24
     # 可使用的用户级别
@@ -41,10 +42,10 @@ class ZhuqueSignin(_PluginBase):
     _cookie = None
     _onlyonce = False
     _notify = False
-    _target_level = None
-    _enable_skill_release = None
-    _enable_level_up = None
     _history_days = None
+    _level_up = None
+    _skill_release = None
+    _target_level = None
 
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
@@ -59,10 +60,10 @@ class ZhuqueSignin(_PluginBase):
             self._cookie = config.get("cookie")
             self._notify = config.get("notify")
             self._onlyonce = config.get("onlyonce")
-            self._target_level = config.get("target_level") or 79
-            self._enable_skill_release = config.get("enable_skill_release") or True
-            self._enable_level_up = config.get("enable_level_up") or True
-            self._history_days = config.get("history_days") or 30
+            self._history_days = config.get("history_days", 30)
+            self._level_up = config.get("level_up")
+            self._skill_release = config.get("skill_release")
+            self._target_level = config.get("target_level", 79)
 
         if self._onlyonce:
             # 定时服务
@@ -79,10 +80,10 @@ class ZhuqueSignin(_PluginBase):
                 "enabled": self._enabled,
                 "cookie": self._cookie,
                 "notify": self._notify,
-                "target_level": self._target_level,
-                "enable_skill_release": self._enable_skill_release,
-                "enable_level_up": self._enable_level_up,
                 "history_days": self._history_days,
+                "level_up": self._level_up,
+                "skill_release": self._skill_release,
+                "target_level": self._target_level,
             })
 
             # 启动任务
@@ -92,91 +93,130 @@ class ZhuqueSignin(_PluginBase):
 
     def __signin(self):
         """
-        朱雀助手
+        执行请求任务
         """
+        res = RequestUtils(cookies=self._cookie).get_res(url="https://zhuque.in/index")
+        if not res or res.status_code != 200:
+            logger.error("请求错误！")
+            return
+
+        # 获取csrfToken
+        pattern = r'<meta\s+name="x-csrf-token"\s+content="([^"]+)">'
+        csrfToken = re.findall(pattern, res.text)
+        if not csrfToken:
+            logger.error("请求csrfToken失败！")
+            return
+
+        csrfToken = csrfToken[0]
+        logger.info(f"获取csrfToken成功。 {csrfToken}")
+
+        res = RequestUtils(cookies=self._cookie).get_res(url="https://zhuque.in/api/user/getMainInfo")
+        if not res or res.status_code != 200:
+            logger.error("请求错误！")
+            return
+
+        # 获取username
+        data = res.json().get('data', {})
+        username = data.get('username', res.text)
+        if not username:
+            logger.error("获取用户名失败！")
+            return None
+
+        logger.info(f"获取username成功。 {username}")
+
         headers = {
             "cookie": self._cookie,
             "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-            "x-csrf-token": "",  # 这里需要从请求中获取
+            "x-csrf-token": csrfToken,
         }
 
+        # 开始执行
         results = self.train_genshin_character(self._target_level, self._enable_skill_release, self._enable_level_up, headers)
         bonus, min_level = self.get_user_info(headers)
         if bonus is not None and min_level is not None:
             rich_text_report = self.generate_rich_text_report(results, bonus, min_level)
             logger.info(rich_text_report)
             if self._notify:
-                self.send_weixin_message(rich_text_report)
+                self.post_message(rich_text_report)
         else:
             logger.error("获取用户信息失败，无法生成报告。")
 
-    def send_weixin_message(self, message):
-        """发送企业微信机器人消息"""
-        WEIXIN_WEBHOOK_URL = os.getenv('WEIXIN_WEBHOOK_URL')
-        if not WEIXIN_WEBHOOK_URL:
-            logger.error('环境变量 WEIXIN_WEBHOOK_URL 未设置')
-            return
+        sign_dict = json.loads(res.text)
+        money = sign_dict['data']['attributes']['money']
+        totalContinuousCheckIn = sign_dict['data']['attributes']['totalContinuousCheckIn']
 
-        headers_local = {'Content-Type': 'application/json'}  # 局部 headers
-        data = {
-            "msgtype": "text",
-            "text": {
-                "content": message
-            }
-        }
-        try:
-            response = requests.post(WEIXIN_WEBHOOK_URL, headers=headers_local, json=data)
-            response.raise_for_status()
-            logger.info("企业微信消息发送成功！")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"企业微信消息发送失败: {e}")
+        # 发送通知
+        if self._notify:
+            self.post_message(
+                mtype=NotificationType.SiteMessage,
+                title="【任务完成】",
+                text=f"{rich_text_report}")
 
-    def get_user_info(self, headers):
-        """获取用户信息（灵石余额和角色最低等级）"""
+        # 读取历史记录
+        history = self.get_data('history', [])
+
+        history.append({
+            "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
+            "totalContinuousCheckIn": totalContinuousCheckIn,
+            "money": money
+        })
+
+        thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
+        history = [record for record in history if
+                    datetime.strptime(record["date"],
+                                        '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
+        # 保存签到历史
+        self.save_data(key="history", value=history)
+
+    def get_user_info(self, headers, csrfToken):
+        """
+        获取用户信息（灵石余额和角色最低等级）
+        """
         url = "https://zhuque.in/api/gaming/listGenshinCharacter"
         try:
-            response = requests.get(url, headers=headers)
+            response = RequestUtils(headers=headers).get_res(url=url)
             response.raise_for_status()
             data = response.json()['data']
             bonus = data['bonus']
             min_level = min(char['info']['level'] for char in data['characters'])
             return bonus, min_level
-        except requests.exceptions.RequestException as e:
-            logger.error(f"获取用户信息失败: {e}")
+        except RequestUtils.exceptions.RequestException as e:
+            logger.error(f"获取用户信息失败: {e}，响应内容：{response.content if 'response' in locals() else '无响应'}")
             return None, None
 
-    def train_genshin_character(self, level, enable_skill_release, enable_level_up, headers):
+    def train_genshin_character(self, level, csrfToken, headers):
         results = {}
         # 释放技能
-        if enable_skill_release:
+        if self._skill_release:
             url = "https://zhuque.in/api/gaming/fireGenshinCharacterMagic"
-            data = {
-                "all": 1,
-                "resetModal": True
+            
+        data = {
+            "all": 1,
+            "resetModal": True
+        }
+        try:
+            response = RequestUtils(headers=headers).post_res(url=url, json=data)
+            response.raise_for_status()
+            response_data = response.json()
+            bonus = response_data['data']['bonus']
+            results['skill_release'] = {
+                'status': '成功',
+                'bonus': bonus
             }
-            try:
-                response = requests.post(url, headers=headers, json=data)
-                response.raise_for_status()
-                response_data = response.json()
-                bonus = response_data['data']['bonus']
-                results['skill_release'] = {
-                    'status': '成功',
-                    'bonus': bonus
-                }
-            except requests.exceptions.RequestException as e:
-                results['skill_release'] = {'status': '失败', 'error': '访问错误'}
+        except RequestUtils.exceptions.RequestException as e:
+            results['skill_release'] = {'status': '失败', 'error': '访问错误'}
         # 一键升级
-        if enable_level_up:
+        if self._level_up:
             url = "https://zhuque.in/api/gaming/trainGenshinCharacter"
             data = {
                 "resetModal": False,
                 "level": level,
             }
             try:
-                response = requests.post(url, headers=headers, json=data)
+                response = RequestUtils(headers=headers).post_res(url=url, json=data)
                 response.raise_for_status()
                 results['level_up'] = {'status': '成功'}
-            except requests.exceptions.RequestException as e:
+            except RequestUtils.exceptions.RequestException as e:
                 if response.status_code == 400:
                     results['level_up'] = {'status': '成功', 'error': '灵石不足'}
                 else:
@@ -186,13 +226,13 @@ class ZhuqueSignin(_PluginBase):
     def generate_rich_text_report(self, results, bonus, min_level):
         """生成报告"""
         report = "🌟 朱雀助手 🌟\n"
-        report += f"技能释放：{'✅ ' if self._enable_skill_release else '❌ '}\n"
+        report += f"技能释放：{'✅ ' if self._skill_release else '❌ '}\n"
         if 'skill_release' in results:
             if results['skill_release']['status'] == '成功':
                 report += f"成功，本次释放获得 {results['skill_release']['bonus']} 灵石 💎\n"
             else:
                 report += f"失败，{results['skill_release']['error']} ❗️\n"
-        report += f"一键升级：{'✅' if self._enable_level_up else '❌'}\n"
+        report += f"一键升级：{'✅' if self._level_up else '❌'}\n"
         if 'level_up' in results:
             if results['level_up']['status'] == '成功':
                 report += f"升级成功 🎉，{results['level_up']['error']} \n"
@@ -225,8 +265,8 @@ class ZhuqueSignin(_PluginBase):
         """
         if self._enabled and self._cron:
             return [{
-                "id": "ZhuqueSignin",
-                "name": "朱雀助手服务",
+                "id": "InvitesSignin",
+                "name": "药丸签到服务",
                 "trigger": CronTrigger.from_crontab(self._cron),
                 "func": self.__signin,
                 "kwargs": {}
@@ -301,7 +341,76 @@ class ZhuqueSignin(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 3
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSwitch',
+                                        'props': {
+                                            'model': 'skill_release',
+                                            'label': '批量释放',
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 5
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'target_level',
+                                            'label': '角色最高等级'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 5
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'cookie',
+                                            'label': '站点cookie'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSwitch',
+                                        'props': {
+                                            'model': 'level_up',
+                                            'label': '一键升级',
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 5
                                 },
                                 'content': [
                                     {
@@ -317,7 +426,7 @@ class ZhuqueSignin(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 3
+                                    'md': 5
                                 },
                                 'content': [
                                     {
@@ -328,76 +437,7 @@ class ZhuqueSignin(_PluginBase):
                                         }
                                     }
                                 ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'cookie',
-                                            'label': '朱雀cookie'
-                                        }
-                                    }
-                                ]
                             }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 3
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'target_level',
-                                            'label': '目标等级'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 3
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'enable_skill_release',
-                                            'label': '启用技能释放',
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 3
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'enable_level_up',
-                                            'label': '启用一键升级',
-                                        }
-                                    }
-                                ]
-                            },
                         ]
                     },
                     {
@@ -427,12 +467,12 @@ class ZhuqueSignin(_PluginBase):
             "enabled": False,
             "onlyonce": False,
             "notify": False,
+            "level_up": False,
+            "skill_release": False,
             "cookie": "",
             "history_days": 30,
             "cron": "0 9 * * *",
             "target_level": 79,
-            "enable_skill_release": True,
-            "enable_level_up": True,
         }
 
     def get_page(self) -> List[dict]:
@@ -472,8 +512,12 @@ class ZhuqueSignin(_PluginBase):
                     },
                     {
                         'component': 'td',
-                        'text': history.get("report")
+                        'text': history.get("totalContinuousCheckIn")
                     },
+                    {
+                        'component': 'td',
+                        'text': history.get("money")
+                    }
                 ]
             } for history in historys
         ]
@@ -510,7 +554,14 @@ class ZhuqueSignin(_PluginBase):
                                                 'props': {
                                                     'class': 'text-start ps-4'
                                                 },
-                                                'text': '报告'
+                                                'text': '连续签到次数'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '剩余药丸'
                                             },
                                         ]
                                     },
@@ -525,6 +576,8 @@ class ZhuqueSignin(_PluginBase):
                 ]
             }
         ]
+
+        pass
 
     def stop_service(self):
         """
