@@ -174,7 +174,7 @@ class ZhuquSignin(_PluginBase):
                         text=f"{rich_text_report}")
 
                 # 读取历史记录
-                history = self.get_data('sign_dict', [])
+                history = self.get_data('sign_dict') or []
 
                 history.append({
                     "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
