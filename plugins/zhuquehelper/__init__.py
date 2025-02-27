@@ -542,15 +542,15 @@ class ZhuqueHelper(_PluginBase):
                     },
                     {
                         'component': 'td',
-                        'text': f"{history.get('bonus', 0)} 💎"
-                    },
-                    {
-                        'component': 'td',
                         'text': history.get("min_level")
                     },
                     {
                         'component': 'td',
                         'text': f"{history.get('skill_release_bonus', 0)} 💎"
+                    },
+                    {
+                        'component': 'td',
+                        'text': f"{history.get('bonus', 0)} 💎"
                     }
                 ]
             } for history in historys
