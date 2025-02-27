@@ -60,7 +60,7 @@ class ZhuqueHelper(_PluginBase):
             self._cookie = config.get("cookie")
             self._notify = config.get("notify")
             self._onlyonce = config.get("onlyonce")
-            self._history_days = config.get("history_days", 30)
+            self._history_days = config.get("history_days", 15)
             self._level_up = config.get("level_up")
             self._skill_release = config.get("skill_release")
             self._target_level = config.get("target_level", 79)
@@ -468,7 +468,7 @@ class ZhuqueHelper(_PluginBase):
                                         'props': {
                                             'type': 'info',
                                             'variant': 'tonal',
-                                            'text': '整点定时签到失败？不妨换个时间试试'
+                                            'text': '特别鸣谢 Mr.Cai 大佬，插件源码来自于他的脚本。'
                                         }
                                     }
                                 ]
@@ -484,7 +484,7 @@ class ZhuqueHelper(_PluginBase):
             "level_up": False,
             "skill_release": False,
             "cookie": "",
-            "history_days": 30,
+            "history_days": 15,
             "cron": "0 9 * * *",
             "target_level": 79,
         }
