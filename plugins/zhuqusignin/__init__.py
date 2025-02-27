@@ -172,7 +172,6 @@ class ZhuquSignin(_PluginBase):
                 history.append({
                     "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
                     "totalContinuousCheckIn": totalContinuousCheckIn,
-                    "money": money,
                     "username": username,
                     "bonus": bonus,
                     "min_level": min_level,
@@ -184,6 +183,7 @@ class ZhuquSignin(_PluginBase):
                         datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
                 # 保存签到历史
                 self.save_data(key="history", value=history)
+                logger.info(f"保存签到历史完成，当前历史记录: {history}")
 
             except RequestUtils.exceptions.RequestException as e:
                 logger.error(f"请求用户信息时发生异常: {e}，响应内容：{res.text if 'res' in locals() else '无响应'}")
@@ -506,6 +506,7 @@ class ZhuquSignin(_PluginBase):
         # 查询同步详情
         historys = self.get_data('history')
         if not historys:
+            logger.error("历史记录为空，无法显示任何信息。")
             return [
                 {
                     'component': 'div',
@@ -517,7 +518,16 @@ class ZhuquSignin(_PluginBase):
             ]
 
         if not isinstance(historys, list):
-            historys = [historys]
+            logger.error(f"历史记录格式不正确，类型为: {type(historys)}")
+            return [
+                {
+                    'component': 'div',
+                    'text': '数据格式错误，请检查日志以获取更多信息。',
+                    'props': {
+                        'class': 'text-center',
+                    }
+                }
+            ]
 
         # 按照签到时间倒序
         historys = sorted(historys, key=lambda x: x.get("date") or 0, reverse=True)
@@ -540,10 +550,6 @@ class ZhuquSignin(_PluginBase):
                     {
                         'component': 'td',
                         'text': history.get("totalContinuousCheckIn")
-                    },
-                    {
-                        'component': 'td',
-                        'text': history.get("money")
                     },
                     {
                         'component': 'td',
@@ -598,13 +604,6 @@ class ZhuquSignin(_PluginBase):
                                                     'class': 'text-start ps-4'
                                                 },
                                                 'text': '连续签到次数'
-                                            },
-                                            {
-                                                'component': 'th',
-                                                'props': {
-                                                    'class': 'text-start ps-4'
-                                                },
-                                                'text': '剩余药丸'
                                             },
                                             {
                                                 'component': 'th',
