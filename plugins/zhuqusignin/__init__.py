@@ -157,7 +157,8 @@ class ZhuquSignin(_PluginBase):
                     "username": username,
                     "bonus": bonus,
                     "min_level": min_level,
-                    "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0)
+                    "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0),
+                    "totalContinuousCheckIn": totalContinuousCheckIn
                 })
 
                 username = sign_dict['username']
@@ -173,7 +174,7 @@ class ZhuquSignin(_PluginBase):
                         text=f"{rich_text_report}")
 
                 # 读取历史记录
-                history = self.get_data('history', [])
+                history = self.get_data('sign_dict', [])
 
                 history.append({
                     "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
@@ -181,7 +182,8 @@ class ZhuquSignin(_PluginBase):
                     "username": username,
                     "bonus": bonus,
                     "min_level": min_level,
-                    "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0)
+                    "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0),
+                    "totalContinuousCheckIn": totalContinuousCheckIn
                 })
 
                 thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
@@ -508,7 +510,7 @@ class ZhuquSignin(_PluginBase):
 
     def get_page(self) -> List[dict]:
         # 查询同步详情
-        historys = self.get_data('history')
+        historys = self.get_data('sign_dict')
         if not historys:
             logger.error("历史记录为空，无法显示任何信息。")
             return [
