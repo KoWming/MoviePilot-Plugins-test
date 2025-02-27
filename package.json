@@ -31,9 +31,9 @@
     },
     "ZhuquSignin": {
         "name": "朱雀助手",
-        "description": "技能释放、一键升级、签到、获取签到记录。",
+        "description": "技能释放、一键升级、获取执行记录。",
         "labels": "站点",
-        "version": "1.0",
+        "version": "1.1",
         "icon": "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins-test/main/icons/GroupChat.png",
         "author": "KoWming",
         "level": 2,
