@@ -151,7 +151,7 @@ class ZhuquSignin(_PluginBase):
                 sign_dict = [username, bonus, min_level, results]
                 sign_dict = dict(zip(['username', 'bonus', 'min_level', 'results'], sign_dict))
                 logger.info(f"开始保存签到记录... {sign_dict}")
-                self.save_data(key="history", value=history)
+                self.save_data(key="sign_dict", value=sign_dict)
                 logger.info(f"保存签到记录完成")
                 sign_dict.update({
                     "username": username,
