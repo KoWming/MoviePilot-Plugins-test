@@ -110,7 +110,7 @@ class ZhuquSignin(_PluginBase):
         csrfToken = csrfToken[0]
         logger.info(f"获取csrfToken成功。 {csrfToken}")
 
-        res = RequestUtils(cookies=self._cookie).get_res(url="https://zhuque.in/api/user/getMainInfo")
+        res = RequestUtils(cookies=self._cookie, headers=headers).get_res(url="https://zhuque.in/api/user/getMainInfo")
         if not res or res.status_code != 200:
             logger.error("请求错误！")
             return
@@ -189,7 +189,7 @@ class ZhuquSignin(_PluginBase):
         # 释放技能
         if self._skill_release:
             url = "https://zhuque.in/api/gaming/fireGenshinCharacterMagic"
-            
+
         data = {
             "all": 1,
             "resetModal": True
