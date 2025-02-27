@@ -112,7 +112,7 @@ class ZhuquSignin(_PluginBase):
             logger.info(f"获取csrfToken成功。 {csrfToken}")
 
             try:
-                res = RequestUtils(cookies=self._cookie, headers=headers).get_res(url="https://zhuque.in/api/user/getMainInfo")
+                res = RequestUtils(headers=headers).get_res(url="https://zhuque.in/api/user/getMainInfo")
                 if not res or res.status_code != 200:
                     logger.error("请求用户信息失败！状态码：%s，响应内容：%s", res.status_code if res else "无响应", res.text if res else "")
                     return
