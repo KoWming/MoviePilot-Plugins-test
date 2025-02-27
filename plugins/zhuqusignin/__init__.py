@@ -148,7 +148,11 @@ class ZhuquSignin(_PluginBase):
                 else:
                     logger.error("获取用户信息失败，无法生成报告。")
 
-                sign_dict = res.json().get('data', {}).get('attributes', {})
+                sign_dict = [username, bonus, min_level, results]
+                sign_dict = dict(zip(['username', 'bonus', 'min_level', 'results'], sign_dict))
+                logger.info(f"开始保存签到记录... {sign_dict}")
+                self.save_data(key="history", value=history)
+                logger.info(f"保存签到记录完成")
                 sign_dict.update({
                     "username": username,
                     "bonus": bonus,
@@ -183,9 +187,7 @@ class ZhuquSignin(_PluginBase):
                 thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
                 history = [record for record in history if
                         datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
-                # 保存签到历史
-                self.save_data(key="history", value=history)
-                logger.info(f"保存签到历史完成，当前历史记录: {history}")
+
 
             except RequestUtils.exceptions.RequestException as e:
                 logger.error(f"请求用户信息时发生异常: {e}，响应内容：{res.text if 'res' in locals() else '无响应'}")
