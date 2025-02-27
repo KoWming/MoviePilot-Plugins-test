@@ -1,5 +1,6 @@
 import json
 import re
+import os
 import time
 from datetime import datetime, timedelta
 
@@ -19,7 +20,7 @@ class ZhuquSignin(_PluginBase):
     # 插件名称
     plugin_name = "朱雀助手"
     # 插件描述
-    plugin_desc = "技能释放、一键升级、签到、获取签到记录"
+    plugin_desc = "技能释放、一键升级、获取执行记录"
     # 插件图标
     plugin_icon = "invites.png"
     # 插件版本
@@ -268,6 +269,40 @@ class ZhuquSignin(_PluginBase):
         except Exception as e:
             logger.error(f"生成报告时发生异常: {e}")
             return "🌟 朱雀助手 🌟\n生成报告时发生错误，请检查日志以获取更多信息。"
+        
+    def save_data(self, key: str, value: Any):
+        """
+        保存数据
+        """
+        try:
+            data_dir = os.path.join(os.path.dirname(__file__), 'data')
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+            file_path = os.path.join(data_dir, f"{key}.json")
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(value, f, ensure_ascii=False, indent=4)
+            logger.info(f"数据保存成功，key: {key}, value: {value}")
+        except Exception as e:
+            logger.error(f"保存数据时发生异常: {e}")
+
+    def get_data(self, key: str, default: Any = None) -> Any:
+        """
+        读取数据
+        """
+        try:
+            data_dir = os.path.join(os.path.dirname(__file__), 'data')
+            file_path = os.path.join(data_dir, f"{key}.json")
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                logger.info(f"数据读取成功，key: {key}, value: {data}")
+                return data
+            else:
+                logger.info(f"数据文件不存在，key: {key}")
+                return default
+        except Exception as e:
+            logger.error(f"读取数据时发生异常: {e}")
+            return default
 
     def get_state(self) -> bool:
         return self._enabled
