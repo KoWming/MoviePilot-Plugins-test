@@ -134,9 +134,9 @@ class ZhuquSignin(_PluginBase):
 
                 # 开始执行
                 results = self.train_genshin_character(self._target_level, self._skill_release, self._level_up, headers)
-                bonus, min_level = self.get_user_info(headers)
+                bonus, min_level = self.get_user_info(self, headers)
                 if bonus is not None and min_level is not None:
-                    rich_text_report = self.generate_rich_text_report(results, bonus, min_level)
+                    rich_text_report = self.generate_rich_text_report(self, results, bonus, min_level)
                     logger.info(rich_text_report)
                     if self._notify:
                         self.post_message(rich_text_report)
@@ -176,7 +176,7 @@ class ZhuquSignin(_PluginBase):
         except RequestUtils.exceptions.RequestException as e:
             logger.error(f"请求首页时发生异常: {e}")
 
-    def get_user_info(self, headers, csrfToken):
+    def get_user_info(self, headers):
         """
         获取用户信息（灵石余额和角色最低等级）
         """
@@ -192,7 +192,7 @@ class ZhuquSignin(_PluginBase):
             logger.error(f"获取用户信息失败: {e}，响应内容：{response.content if 'response' in locals() else '无响应'}")
             return None, None
 
-    def train_genshin_character(self, level, csrfToken, headers):
+    def train_genshin_character(self, level, headers):
         results = {}
         # 释放技能
         if self._skill_release:
