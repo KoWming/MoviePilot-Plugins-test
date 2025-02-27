@@ -137,9 +137,9 @@ class ZhuquSignin(_PluginBase):
                 bonus, min_level = self.get_user_info(headers)
                 logger.info(f"获取用户信息完成，bonus: {bonus}, min_level: {min_level}")
 
-                logger.info("开始训练角色...")
+                logger.info("开始一键升级角色...")
                 results = self.train_genshin_character(self._target_level, self._skill_release, self._level_up, headers)
-                logger.info(f"训练角色完成，结果: {results}")
+                logger.info(f"一键升级完成，结果: {results}")
 
                 if bonus is not None and min_level is not None:
                     logger.info("开始生成报告...")
@@ -229,7 +229,7 @@ class ZhuquSignin(_PluginBase):
                 response.raise_for_status()
                 results['level_up'] = {'status': '成功'}
             except RequestUtils.exceptions.RequestException as e:
-                if response.status_code == 400:
+                if response.status_code == 200:
                     results['level_up'] = {'status': '成功', 'error': '灵石不足'}
                 else:
                     results['level_up'] = {'status': '失败', 'error': '网络错误'}
