@@ -148,12 +148,31 @@ class ZhuquSignin(_PluginBase):
                 else:
                     logger.error("获取用户信息失败，无法生成报告。")
 
+                sign_dict = res.json()
+                money = sign_dict['data']['attributes']['money']
+                totalContinuousCheckIn = sign_dict['data']['attributes']['totalContinuousCheckIn']
+
                 # 发送通知
                 if self._notify:
                     self.post_message(
                         mtype=NotificationType.SiteMessage,
                         title="【任务完成】",
                         text=f"{rich_text_report}")
+
+                # 读取历史记录
+                history = self.get_data('history', [])
+
+                history.append({
+                    "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
+                    "totalContinuousCheckIn": totalContinuousCheckIn,
+                    "money": money
+                })
+
+                thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
+                history = [record for record in history if
+                        datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
+                # 保存签到历史
+                self.save_data(key="history", value=history)
 
             except RequestUtils.exceptions.RequestException as e:
                 logger.error(f"请求用户信息时发生异常: {e}，响应内容：{res.text if 'res' in locals() else '无响应'}")
@@ -218,22 +237,26 @@ class ZhuquSignin(_PluginBase):
 
     def generate_rich_text_report(self, results, bonus, min_level):
         """生成报告"""
-        report = "🌟 朱雀助手 🌟\n"
-        report += f"技能释放：{'✅ ' if self._skill_release else '❌ '}\n"
-        if 'skill_release' in results:
-            if results['skill_release']['status'] == '成功':
-                report += f"成功，本次释放获得 {results['skill_release']['bonus']} 灵石 💎\n"
-            else:
-                report += f"失败，{results['skill_release']['error']} ❗️\n"
-        report += f"一键升级：{'✅' if self._level_up else '❌'}\n"
-        if 'level_up' in results:
-            if results['level_up']['status'] == '成功':
-                report += f"升级成功 🎉，{results['level_up']['error']} \n"
-            else:
-                report += f"失败，{results['level_up']['error']} ❗️\n"
-        report += f"当前角色最低等级：{min_level} \n"
-        report += f"当前账户灵石余额：{bonus} 💎\n"
-        return report
+        try:
+            report = "🌟 朱雀助手 🌟\n"
+            report += f"技能释放：{'✅ ' if self._skill_release else '❌ '}\n"
+            if 'skill_release' in results:
+                if results['skill_release']['status'] == '成功':
+                    report += f"成功，本次释放获得 {results['skill_release']['bonus']} 灵石 💎\n"
+                else:
+                    report += f"失败，{results['skill_release']['error']} ❗️\n"
+            report += f"一键升级：{'✅' if self._level_up else '❌'}\n"
+            if 'level_up' in results:
+                if results['level_up']['status'] == '成功':
+                    report += f"升级成功 🎉\n"
+                else:
+                    report += f"失败，{results['level_up']['error']} ❗️\n"
+            report += f"当前角色最低等级：{min_level} \n"
+            report += f"当前账户灵石余额：{bonus} 💎\n"
+            return report
+        except Exception as e:
+            logger.error(f"生成报告时发生异常: {e}")
+            return "🌟 朱雀助手 🌟\n生成报告时发生错误，请检查日志以获取更多信息。"
 
     def get_state(self) -> bool:
         return self._enabled
@@ -469,6 +492,107 @@ class ZhuquSignin(_PluginBase):
         }
 
     def get_page(self) -> List[dict]:
+        # 查询同步详情
+        historys = self.get_data('history')
+        if not historys:
+            return [
+                {
+                    'component': 'div',
+                    'text': '暂无数据',
+                    'props': {
+                        'class': 'text-center',
+                    }
+                }
+            ]
+
+        if not isinstance(historys, list):
+            historys = [historys]
+
+        # 按照签到时间倒序
+        historys = sorted(historys, key=lambda x: x.get("date") or 0, reverse=True)
+
+        # 签到消息
+        sign_msgs = [
+            {
+                'component': 'tr',
+                'props': {
+                    'class': 'text-sm'
+                },
+                'content': [
+                    {
+                        'component': 'td',
+                        'props': {
+                            'class': 'whitespace-nowrap break-keep text-high-emphasis'
+                        },
+                        'text': history.get("date")
+                    },
+                    {
+                        'component': 'td',
+                        'text': history.get("totalContinuousCheckIn")
+                    },
+                    {
+                        'component': 'td',
+                        'text': history.get("money")
+                    }
+                ]
+            } for history in historys
+        ]
+
+        # 拼装页面
+        return [
+            {
+                'component': 'VRow',
+                'content': [
+                    {
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                        },
+                        'content': [
+                            {
+                                'component': 'VTable',
+                                'props': {
+                                    'hover': True
+                                },
+                                'content': [
+                                    {
+                                        'component': 'thead',
+                                        'content': [
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '时间'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '连续签到次数'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '剩余药丸'
+                                            },
+                                        ]
+                                    },
+                                    {
+                                        'component': 'tbody',
+                                        'content': sign_msgs
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+
         pass
 
     def stop_service(self):
