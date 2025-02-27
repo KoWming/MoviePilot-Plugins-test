@@ -148,23 +148,21 @@ class ZhuquSignin(_PluginBase):
                 else:
                     logger.error("获取用户信息失败，无法生成报告。")
 
-                sign_dict = [username, bonus, min_level, results]
-                sign_dict = dict(zip(['username', 'bonus', 'min_level', 'results'], sign_dict))
-                logger.info(f"开始保存签到记录... {sign_dict}")
-                self.save_data(key="sign_dict", value=sign_dict)
-                logger.info(f"保存签到记录完成")
-                sign_dict.update({
+                sign_dict = {
+                    "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
                     "username": username,
                     "bonus": bonus,
                     "min_level": min_level,
                     "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0),
-                    "totalContinuousCheckIn": totalContinuousCheckIn
-                })
+                    "totalContinuousCheckIn": 0  
+                }
+                logger.info(f"开始保存签到记录... {sign_dict}")
 
-                username = sign_dict['username']
-                bonus = sign_dict['bonus']
-                min_level = sign_dict['min_level']
-                totalContinuousCheckIn = sign_dict['totalContinuousCheckIn']
+                # 读取历史记录
+                history = self.get_data('sign_dict') or []
+                history.append(sign_dict)
+                self.save_data(key="sign_dict", value=history)
+                logger.info(f"保存签到记录完成")
 
                 # 发送通知
                 if self._notify:
@@ -173,23 +171,9 @@ class ZhuquSignin(_PluginBase):
                         title="【任务完成】",
                         text=f"{rich_text_report}")
 
-                # 读取历史记录
-                history = self.get_data('sign_dict') or []
-
-                history.append({
-                    "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
-                    "totalContinuousCheckIn": totalContinuousCheckIn,
-                    "username": username,
-                    "bonus": bonus,
-                    "min_level": min_level,
-                    "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0),
-                    "totalContinuousCheckIn": totalContinuousCheckIn
-                })
-
                 thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
                 history = [record for record in history if
                         datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
-
 
             except RequestUtils.exceptions.RequestException as e:
                 logger.error(f"请求用户信息时发生异常: {e}，响应内容：{res.text if 'res' in locals() else '无响应'}")
