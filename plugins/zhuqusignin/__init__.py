@@ -229,7 +229,7 @@ class ZhuquSignin(_PluginBase):
                 response.raise_for_status()
                 results['level_up'] = {'status': '成功'}
             except RequestUtils.exceptions.RequestException as e:
-                if response.status_code == 200:
+                if response.status_code == 400:
                     results['level_up'] = {'status': '成功', 'error': '灵石不足'}
                 else:
                     results['level_up'] = {'status': '失败', 'error': '网络错误'}
@@ -281,8 +281,8 @@ class ZhuquSignin(_PluginBase):
         """
         if self._enabled and self._cron:
             return [{
-                "id": "InvitesSignin",
-                "name": "药丸签到服务",
+                "id": "ZhuquSignin",
+                "name": "朱雀助手",
                 "trigger": CronTrigger.from_crontab(self._cron),
                 "func": self.__signin,
                 "kwargs": {}
