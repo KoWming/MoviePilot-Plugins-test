@@ -148,9 +148,16 @@ class ZhuquSignin(_PluginBase):
                 else:
                     logger.error("获取用户信息失败，无法生成报告。")
 
-                sign_dict = res.json()
-                money = sign_dict['data']['attributes']['money']
-                totalContinuousCheckIn = sign_dict['data']['attributes']['totalContinuousCheckIn']
+                sign_dict = res.json().get('data', {}).get('attributes', {})
+                sign_dict.update({
+                    "username": username,
+                    "bonus": bonus,
+                    "min_level": min_level,
+                    "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0)
+                })
+
+                money = sign_dict['money']
+                totalContinuousCheckIn = sign_dict['totalContinuousCheckIn']
 
                 # 发送通知
                 if self._notify:
@@ -165,7 +172,11 @@ class ZhuquSignin(_PluginBase):
                 history.append({
                     "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
                     "totalContinuousCheckIn": totalContinuousCheckIn,
-                    "money": money
+                    "money": money,
+                    "username": username,
+                    "bonus": bonus,
+                    "min_level": min_level,
+                    "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0)
                 })
 
                 thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
@@ -533,6 +544,22 @@ class ZhuquSignin(_PluginBase):
                     {
                         'component': 'td',
                         'text': history.get("money")
+                    },
+                    {
+                        'component': 'td',
+                        'text': history.get("username")
+                    },
+                    {
+                        'component': 'td',
+                        'text': f"{history.get('bonus', 0)} 💎"
+                    },
+                    {
+                        'component': 'td',
+                        'text': history.get("min_level")
+                    },
+                    {
+                        'component': 'td',
+                        'text': f"{history.get('skill_release_bonus', 0)} 💎"
                     }
                 ]
             } for history in historys
@@ -579,6 +606,34 @@ class ZhuquSignin(_PluginBase):
                                                 },
                                                 'text': '剩余药丸'
                                             },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '用户名'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '当前账户灵石余额'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '当前角色最低等级'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '本次释放获得的灵石'
+                                            }
                                         ]
                                     },
                                     {
@@ -592,8 +647,6 @@ class ZhuquSignin(_PluginBase):
                 ]
             }
         ]
-
-        pass
 
     def stop_service(self):
         """
