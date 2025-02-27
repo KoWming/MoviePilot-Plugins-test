@@ -95,78 +95,86 @@ class ZhuquSignin(_PluginBase):
         """
         执行请求任务
         """
-        res = RequestUtils(cookies=self._cookie).get_res(url="https://zhuque.in/index")
-        if not res or res.status_code != 200:
-            logger.error("请求错误！")
-            return
+        try:
+            res = RequestUtils(cookies=self._cookie).get_res(url="https://zhuque.in/index")
+            if not res or res.status_code != 200:
+                logger.error("请求首页失败！状态码：%s", res.status_code if res else "无响应")
+                return
 
-        # 获取csrfToken
-        pattern = r'<meta\s+name="x-csrf-token"\s+content="([^"]+)">'
-        csrfToken = re.findall(pattern, res.text)
-        if not csrfToken:
-            logger.error("请求csrfToken失败！")
-            return
+            # 获取csrfToken
+            pattern = r'<meta\s+name="x-csrf-token"\s+content="([^"]+)">'
+            csrfToken = re.findall(pattern, res.text)
+            if not csrfToken:
+                logger.error("请求csrfToken失败！页面内容：%s", res.text[:500])  # 打印部分页面内容以便调试
+                return
 
-        csrfToken = csrfToken[0]
-        logger.info(f"获取csrfToken成功。 {csrfToken}")
+            csrfToken = csrfToken[0]
+            logger.info(f"获取csrfToken成功。 {csrfToken}")
 
-        res = RequestUtils(cookies=self._cookie, headers=headers).get_res(url="https://zhuque.in/api/user/getMainInfo")
-        if not res or res.status_code != 200:
-            logger.error("请求错误！")
-            return
+            try:
+                res = RequestUtils(cookies=self._cookie, headers=headers).get_res(url="https://zhuque.in/api/user/getMainInfo")
+                if not res or res.status_code != 200:
+                    logger.error("请求用户信息失败！状态码：%s，响应内容：%s", res.status_code if res else "无响应", res.text if res else "")
+                    return
 
-        # 获取username
-        data = res.json().get('data', {})
-        username = data.get('username', res.text)
-        if not username:
-            logger.error("获取用户名失败！")
-            return None
+                # 获取username
+                data = res.json().get('data', {})
+                username = data.get('username', res.text)
+                if not username:
+                    logger.error("获取用户名失败！响应内容：%s", res.text)
+                    return None
 
-        logger.info(f"获取username成功。 {username}")
+                logger.info(f"获取username成功。 {username}")
 
-        headers = {
-            "cookie": self._cookie,
-            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-            "x-csrf-token": csrfToken,
-        }
+                headers = {
+                    "cookie": self._cookie,
+                    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+                    "x-csrf-token": csrfToken,
+                }
 
-        # 开始执行
-        results = self.train_genshin_character(self._target_level, self._enable_skill_release, self._enable_level_up, headers)
-        bonus, min_level = self.get_user_info(headers)
-        if bonus is not None and min_level is not None:
-            rich_text_report = self.generate_rich_text_report(results, bonus, min_level)
-            logger.info(rich_text_report)
-            if self._notify:
-                self.post_message(rich_text_report)
-        else:
-            logger.error("获取用户信息失败，无法生成报告。")
+                # 开始执行
+                results = self.train_genshin_character(self._target_level, self._skill_release, self._level_up, headers)
+                bonus, min_level = self.get_user_info(headers)
+                if bonus is not None and min_level is not None:
+                    rich_text_report = self.generate_rich_text_report(results, bonus, min_level)
+                    logger.info(rich_text_report)
+                    if self._notify:
+                        self.post_message(rich_text_report)
+                else:
+                    logger.error("获取用户信息失败，无法生成报告。")
 
-        sign_dict = json.loads(res.text)
-        money = sign_dict['data']['attributes']['money']
-        totalContinuousCheckIn = sign_dict['data']['attributes']['totalContinuousCheckIn']
+                sign_dict = res.json()
+                money = sign_dict['data']['attributes']['money']
+                totalContinuousCheckIn = sign_dict['data']['attributes']['totalContinuousCheckIn']
 
-        # 发送通知
-        if self._notify:
-            self.post_message(
-                mtype=NotificationType.SiteMessage,
-                title="【任务完成】",
-                text=f"{rich_text_report}")
+                # 发送通知
+                if self._notify:
+                    self.post_message(
+                        mtype=NotificationType.SiteMessage,
+                        title="【任务完成】",
+                        text=f"{rich_text_report}")
 
-        # 读取历史记录
-        history = self.get_data('history', [])
+                # 读取历史记录
+                history = self.get_data('history', [])
 
-        history.append({
-            "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
-            "totalContinuousCheckIn": totalContinuousCheckIn,
-            "money": money
-        })
+                history.append({
+                    "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
+                    "totalContinuousCheckIn": totalContinuousCheckIn,
+                    "money": money
+                })
 
-        thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
-        history = [record for record in history if
-                    datetime.strptime(record["date"],
-                                        '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
-        # 保存签到历史
-        self.save_data(key="history", value=history)
+                thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
+                history = [record for record in history if
+                            datetime.strptime(record["date"],
+                                                '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
+                # 保存签到历史
+                self.save_data(key="history", value=history)
+
+            except RequestUtils.exceptions.RequestException as e:
+                logger.error(f"请求用户信息时发生异常: {e}，响应内容：{res.text if 'res' in locals() else '无响应'}")
+
+        except RequestUtils.exceptions.RequestException as e:
+            logger.error(f"请求首页时发生异常: {e}")
 
     def get_user_info(self, headers, csrfToken):
         """
