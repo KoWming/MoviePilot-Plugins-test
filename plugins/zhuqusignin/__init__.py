@@ -111,6 +111,12 @@ class ZhuquSignin(_PluginBase):
             csrfToken = csrfToken[0]
             logger.info(f"获取csrfToken成功。 {csrfToken}")
 
+            headers = {
+                "cookie": self._cookie,
+                "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+                "x-csrf-token": csrfToken,
+            }
+
             try:
                 res = RequestUtils(headers=headers).get_res(url="https://zhuque.in/api/user/getMainInfo")
                 if not res or res.status_code != 200:
@@ -122,15 +128,9 @@ class ZhuquSignin(_PluginBase):
                 username = data.get('username', res.text)
                 if not username:
                     logger.error("获取用户名失败！响应内容：%s", res.text)
-                    return None
+                    return
 
                 logger.info(f"获取username成功。 {username}")
-
-                headers = {
-                    "cookie": self._cookie,
-                    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-                    "x-csrf-token": csrfToken,
-                }
 
                 # 开始执行
                 results = self.train_genshin_character(self._target_level, self._skill_release, self._level_up, headers)
