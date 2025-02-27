@@ -133,13 +133,18 @@ class ZhuquSignin(_PluginBase):
                 logger.info(f"获取username成功。 {username}")
 
                 # 开始执行
+                logger.info("开始获取用户信息...")
+                bonus, min_level = self.get_user_info(headers)
+                logger.info(f"获取用户信息完成，bonus: {bonus}, min_level: {min_level}")
+
+                logger.info("开始训练角色...")
                 results = self.train_genshin_character(self._target_level, self._skill_release, self._level_up, headers)
-                bonus, min_level = self.get_user_info(self, headers)
+                logger.info(f"训练角色完成，结果: {results}")
+
                 if bonus is not None and min_level is not None:
-                    rich_text_report = self.generate_rich_text_report(self, results, bonus, min_level)
-                    logger.info(rich_text_report)
-                    if self._notify:
-                        self.post_message(rich_text_report)
+                    logger.info("开始生成报告...")
+                    rich_text_report = self.generate_rich_text_report(results, bonus, min_level)
+                    logger.info(f"报告生成完成：\n{rich_text_report}")
                 else:
                     logger.error("获取用户信息失败，无法生成报告。")
 
@@ -165,8 +170,7 @@ class ZhuquSignin(_PluginBase):
 
                 thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
                 history = [record for record in history if
-                            datetime.strptime(record["date"],
-                                                '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
+                        datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
                 # 保存签到历史
                 self.save_data(key="history", value=history)
 
@@ -192,29 +196,29 @@ class ZhuquSignin(_PluginBase):
             logger.error(f"获取用户信息失败: {e}，响应内容：{response.content if 'response' in locals() else '无响应'}")
             return None, None
 
-    def train_genshin_character(self, level, headers):
+    def train_genshin_character(self, level, skill_release, level_up, headers):
         results = {}
         # 释放技能
-        if self._skill_release:
+        if skill_release:
             url = "https://zhuque.in/api/gaming/fireGenshinCharacterMagic"
-
-        data = {
-            "all": 1,
-            "resetModal": True
-        }
-        try:
-            response = RequestUtils(headers=headers).post_res(url=url, json=data)
-            response.raise_for_status()
-            response_data = response.json()
-            bonus = response_data['data']['bonus']
-            results['skill_release'] = {
-                'status': '成功',
-                'bonus': bonus
+            data = {
+                "all": 1,
+                "resetModal": True
             }
-        except RequestUtils.exceptions.RequestException as e:
-            results['skill_release'] = {'status': '失败', 'error': '访问错误'}
+            try:
+                response = RequestUtils(headers=headers).post_res(url=url, json=data)
+                response.raise_for_status()
+                response_data = response.json()
+                bonus = response_data['data']['bonus']
+                results['skill_release'] = {
+                    'status': '成功',
+                    'bonus': bonus
+                }
+            except RequestUtils.exceptions.RequestException as e:
+                results['skill_release'] = {'status': '失败', 'error': '访问错误'}
+
         # 一键升级
-        if self._level_up:
+        if level_up:
             url = "https://zhuque.in/api/gaming/trainGenshinCharacter"
             data = {
                 "resetModal": False,
