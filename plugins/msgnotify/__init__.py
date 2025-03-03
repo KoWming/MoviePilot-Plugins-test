@@ -194,30 +194,25 @@ class MsgNotify(_PluginBase):
                         ]
                     },
                     {
-                        'component': 'VRow',
+                        'component': 'VAlert',
+                        'props': {
+                            'type': 'success',
+                            'variant': 'tonal'
+                        },
                         'content': [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                },
+                                'component': 'div',
                                 'content': [
                                     {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'success',
-                                            'variant': 'tonal'
-                                        },
-                                        'content': [
-                                            {
-                                                'component': 'span',
-                                                'text': 'GET_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_form?apikey=api_token \n'
-                                            },
-                                            {
-                                                'component': 'span',
-                                                'text': 'POST_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_json?apikey=api_token'
-                                            },
-                                        ]
+                                        'component': 'span',
+                                        'text': 'GET_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_form?apikey=api_token'
+                                    },
+                                    {
+                                        'component': 'br'
+                                    },
+                                    {
+                                        'component': 'span',
+                                        'text': 'POST_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_json?apikey=api_token'
                                     }
                                 ]
                             }
