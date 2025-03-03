@@ -60,12 +60,10 @@ class MsgNotify(_PluginBase):
             message="发送成功"
         )
     
-    def msg_notify_form(self, request: NotifyRequest) -> schemas.Response:
+    def msg_notify_form(self, title: str, text: str) -> schemas.Response:
         """
         发送通知
         """
-        title = request.title
-        text = request.text
         logger.info(f"收到以下消息:\n{title}\n{text}")
         if self._enabled and self._notify:
             mtype = NotificationType.Manual
