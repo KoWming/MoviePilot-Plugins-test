@@ -216,14 +216,73 @@ class MsgNotify(_PluginBase):
                                                 'content': [
                                                     {
                                                         'component': 'span',
-                                                        'text': 'GET_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_form?apikey=api_token'
+                                                        'text': 'GET_API接口地址：http://moviepilot_ip:port/api/v1/plugin/MsgNotify/send_form?apikey=api_token'
                                                     },
                                                     {
                                                         'component': 'br'
                                                     },
                                                     {
                                                         'component': 'span',
-                                                        'text': 'POST_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_json?apikey=api_token'
+                                                        'text': 'POST_API接口地址：http://moviepilot_ip:port/api/v1/plugin/MsgNotify/send_json?apikey=api_token'
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VAlert',
+                                        'props': {
+                                            'type': 'success',
+                                            'variant': 'tonal'
+                                        },
+                                        'content': [
+                                            {
+                                                'component': 'div',
+                                                'content': [
+                                                    {
+                                                        'component': 'span',
+                                                        'text': '此插件安装完后API未生效需要重启生效API。'
+                                                    },
+                                                    {
+                                                        'component': 'br'
+                                                    },
+                                                    {
+                                                        'component': 'span',
+                                                        'text': '其中moviepilot_ip:port为MoviePilot的IP地址和端口号，api_token为MoviePilot的API令牌。'
+                                                    },
+                                                    {
+                                                        'component': 'br'
+                                                    },
+                                                    {
+                                                        'component': 'span',
+                                                        'text': '请求方法：GET；必要参数：apikey={API_TOKEN}；title=消息标题；text=消息内容'
+                                                    },
+                                                    {
+                                                        'component': 'br'
+                                                    },
+                                                    {
+                                                        'component': 'span',
+                                                        'text': '请求方法：POST；请求类型：application/json；请求体：{"title": "{title}", "text": "{content}"}'
+                                                    },
+                                                    {
+                                                        'component': 'br'
+                                                    },
+                                                    {
+                                                        'component': 'span',
+                                                        'text': '必要参数或请求体可用变量请根据你使用的第三方应用要求填写！'
                                                     }
                                                 ]
                                             }
@@ -290,27 +349,6 @@ class MsgNotify(_PluginBase):
                                                 'text': ' 大佬！ '
                                             }
                                         ]
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'info',
-                                            'variant': 'tonal',
-                                            'text': '此插件安装完后API未生效需要重启生效API。\n其中MoviePilot_IP为MoviePilot的IP地址，PORT为MoviePilot的端口号，api_token为MoviePilot的API令牌。\n请求方法：POST；请求类型：application/json；请求体：{"title": "{title}", "text": "{content}"}\n请求体可用变量请根据你使用的第三方应用要求填写！'
-                                        }
                                     }
                                 ]
                             }
