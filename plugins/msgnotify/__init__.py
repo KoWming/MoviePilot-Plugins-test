@@ -211,7 +211,7 @@ class MsgNotify(_PluginBase):
                                         'content': [
                                             {
                                                 'component': 'span',
-                                                'text': 'GET_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_form?apikey=api_token'
+                                                'text': 'GET_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_form?apikey=api_token \n'
                                             },
                                             {
                                                 'component': 'span',
