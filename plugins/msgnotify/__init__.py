@@ -48,23 +48,16 @@ class MsgNotify(_PluginBase):
         if apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API令牌错误!")
 
-        try:
-            title = request.title
-            text = request.text
-            logger.info(f"收到以下消息:\n{title}\n{text}")
-            if self._enabled and self._notify:
-                mtype = NotificationType.Manual
-                if self._msgtype:
-                    mtype = NotificationType.__getitem__(str(self._msgtype)) or NotificationType.Manual
-                self.post_message(mtype=mtype,
-                                title=title,
-                                text=text)
-        except Exception as e:
-            logger.error(f"处理POST请求时发生异常: {str(e)}")
-            return schemas.Response(
-                success=False,
-                message=f"请求处理失败: {str(e)}"
-            )
+        title = request.title
+        text = request.text
+        logger.info(f"收到以下消息:\n{title}\n{text}")
+        if self._enabled and self._notify:
+            mtype = NotificationType.Manual
+            if self._msgtype:
+                mtype = NotificationType.__getitem__(str(self._msgtype)) or NotificationType.Manual
+            self.post_message(mtype=mtype,
+                            title=title,
+                            text=text)
 
         return schemas.Response(
             success=True,
@@ -79,21 +72,14 @@ class MsgNotify(_PluginBase):
         if apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API令牌错误!")
 
-        try:
-            logger.info(f"收到以下消息:\n{title}\n{text}")
-            if self._enabled and self._notify:
-                mtype = NotificationType.Manual
-                if self._msgtype:
-                    mtype = NotificationType.__getitem__(str(self._msgtype)) or NotificationType.Manual
-                self.post_message(mtype=mtype,
-                                title=title,
-                                text=text)
-        except Exception as e:
-            logger.error(f"处理POST请求时发生异常: {str(e)}")
-            return schemas.Response(
-                success=False,
-                message=f"请求处理失败: {str(e)}"
-            )
+        logger.info(f"收到以下消息:\n{title}\n{text}")
+        if self._enabled and self._notify:
+            mtype = NotificationType.Manual
+            if self._msgtype:
+                mtype = NotificationType.__getitem__(str(self._msgtype)) or NotificationType.Manual
+            self.post_message(mtype=mtype,
+                            title=title,
+                            text=text)
 
         return schemas.Response(
             success=True,
@@ -227,15 +213,6 @@ class MsgNotify(_PluginBase):
                                                 'component': 'span',
                                                 'text': 'GET_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_form?apikey=api_token'
                                             },
-                                        ]
-                                    },
-                                    {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'success',
-                                            'variant': 'tonal'
-                                        },
-                                        'content': [
                                             {
                                                 'component': 'span',
                                                 'text': 'POST_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_json?apikey=api_token'
@@ -334,7 +311,7 @@ class MsgNotify(_PluginBase):
         ], {
             "enabled": False,
             "notify": False,
-            "msgtype": NotificationType.Manual
+            "msgtype": ""
         }
 
     def get_page(self) -> List[dict]:
