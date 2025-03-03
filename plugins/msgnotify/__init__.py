@@ -40,7 +40,27 @@ class MsgNotify(_PluginBase):
             self._notify = config.get("notify")
             self._msgtype = config.get("msgtype")
 
-    def msg_notify(self, request: NotifyRequest) -> schemas.Response:
+    def msg_notify_json(self, request: NotifyRequest) -> schemas.Response:
+        """
+        发送通知
+        """
+        title = request.title
+        text = request.text
+        logger.info(f"收到以下消息:\n{title}\n{text}")
+        if self._enabled and self._notify:
+            mtype = NotificationType.Manual
+            if self._msgtype:
+                mtype = NotificationType.__getitem__(str(self._msgtype)) or NotificationType.Manual
+            self.post_message(mtype=mtype,
+                              title=title,
+                              text=text)
+
+        return schemas.Response(
+            success=True,
+            message="发送成功"
+        )
+    
+    def msg_notify_form(self, request: NotifyRequest) -> schemas.Response:
         """
         发送通知
         """
@@ -79,14 +99,14 @@ class MsgNotify(_PluginBase):
         """
         return [{
             "path": "/send_json",
-            "endpoint": self.msg_notify,
+            "endpoint": self.msg_notify_json,
             "methods": ["POST"],
             "summary": "外部应用自定义消息接口使用的API",
             "description": "接受自定义消息webhook通知并推送",
         },
         {
             "path": "/send_form",
-            "endpoint": self.msg_notify,
+            "endpoint": self.msg_notify_form,
             "methods": ["GET"],
             "summary": "外部应用自定义消息接口使用的API",
             "description": "接受自定义消息webhook通知并推送",
@@ -281,7 +301,7 @@ class MsgNotify(_PluginBase):
         ], {
             "enabled": False,
             "notify": False,
-            "msgtype": MsgTypeOptions
+            "msgtype": ""
         }
 
     def get_page(self) -> List[dict]:
