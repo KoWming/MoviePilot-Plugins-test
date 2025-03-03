@@ -186,7 +186,9 @@ class MsgNotify(_PluginBase):
                                             'chips': True,
                                             'model': 'msgtype',
                                             'label': '消息类型',
-                                            'items': MsgTypeOptions
+                                            'items': MsgTypeOptions,
+                                            'hint': '如不选择，消息类型默认为[手动处理]。',
+                                            'persistent-hint': True
                                         }
                                     }
                                 ]
@@ -194,25 +196,38 @@ class MsgNotify(_PluginBase):
                         ]
                     },
                     {
-                        'component': 'VAlert',
-                        'props': {
-                            'type': 'success',
-                            'variant': 'tonal'
-                        },
+                        'component': 'VRow',
                         'content': [
                             {
-                                'component': 'div',
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                },
                                 'content': [
                                     {
-                                        'component': 'span',
-                                        'text': 'GET_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_form?apikey=api_token'
-                                    },
-                                    {
-                                        'component': 'br'
-                                    },
-                                    {
-                                        'component': 'span',
-                                        'text': 'POST_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_json?apikey=api_token'
+                                        'component': 'VAlert',
+                                        'props': {
+                                            'type': 'success',
+                                            'variant': 'tonal'
+                                        },
+                                        'content': [
+                                            {
+                                                'component': 'div',
+                                                'content': [
+                                                    {
+                                                        'component': 'span',
+                                                        'text': 'GET_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_form?apikey=api_token'
+                                                    },
+                                                    {
+                                                        'component': 'br'
+                                                    },
+                                                    {
+                                                        'component': 'span',
+                                                        'text': 'POST_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_json?apikey=api_token'
+                                                    }
+                                                ]
+                                            }
+                                        ]
                                     }
                                 ]
                             }
@@ -294,7 +309,7 @@ class MsgNotify(_PluginBase):
                                         'props': {
                                             'type': 'info',
                                             'variant': 'tonal',
-                                            'text': '此插件安装完后API未生效需要重启生效API。消息类型默认为[手动处理]。\n其中MoviePilot_IP为MoviePilot的IP地址，PORT为MoviePilot的端口号，api_token为MoviePilot的API令牌。\n请求方法：POST；请求类型：application/json；请求体：{"title": "{title}", "text": "{content}"}\n请求体可用变量请根据你使用的第三方应用要求填写！'
+                                            'text': '此插件安装完后API未生效需要重启生效API。\n其中MoviePilot_IP为MoviePilot的IP地址，PORT为MoviePilot的端口号，api_token为MoviePilot的API令牌。\n请求方法：POST；请求类型：application/json；请求体：{"title": "{title}", "text": "{content}"}\n请求体可用变量请根据你使用的第三方应用要求填写！'
                                         }
                                     }
                                 ]
