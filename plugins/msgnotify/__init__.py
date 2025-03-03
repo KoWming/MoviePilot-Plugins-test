@@ -62,7 +62,7 @@ class MsgNotify(_PluginBase):
         return schemas.Response(
             success=True,
             message="发送成功"
-        )
+        ).dict(by_alias=True, exclude_none=True, return_response=True)
     
     def msg_notify_form(self, apikey: str, title: str, text: str) -> schemas.Response:
         """
@@ -83,7 +83,7 @@ class MsgNotify(_PluginBase):
         return schemas.Response(
             success=True,
             message="发送成功"
-        )
+        ).dict(by_alias=True, exclude_none=True, return_response=True)
 
     def get_state(self) -> bool:
         return self._enabled
