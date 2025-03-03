@@ -245,7 +245,7 @@ class MsgNotify(_PluginBase):
                                     {
                                         'component': 'VAlert',
                                         'props': {
-                                            'type': 'success',
+                                            'type': 'info',
                                             'variant': 'tonal'
                                         },
                                         'content': [
