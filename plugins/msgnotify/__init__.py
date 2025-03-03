@@ -48,21 +48,29 @@ class MsgNotify(_PluginBase):
         if apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API令牌错误!")
 
-        title = request.title
-        text = request.text
-        logger.info(f"收到以下消息:\n{title}\n{text}")
-        if self._enabled and self._notify:
-            mtype = NotificationType.Manual
-            if self._msgtype:
-                mtype = NotificationType.__getitem__(str(self._msgtype)) or NotificationType.Manual
-            self.post_message(mtype=mtype,
-                              title=title,
-                              text=text)
+        try:
+            title = request.title
+            text = request.text
+            logger.info(f"收到以下消息:\n{title}\n{text}")
+            if self._enabled and self._notify:
+                mtype = NotificationType.Manual
+                if self._msgtype:
+                    mtype = NotificationType.__getitem__(str(self._msgtype)) or NotificationType.Manual
+                self.post_message(mtype=mtype,
+                                title=title,
+                                text=text)
+        except Exception as e:
+            logger.error(f"处理POST请求时发生异常: {str(e)}")
+            return schemas.Response(
+                success=False,
+                message=f"请求处理失败: {str(e)}"
+            )
 
         return schemas.Response(
             success=True,
             message="发送成功"
-        ).dict(by_alias=True, exclude_none=True, return_response=True)
+        )
+
     
     def msg_notify_form(self, apikey: str, title: str, text: str) -> schemas.Response:
         """
@@ -71,19 +79,26 @@ class MsgNotify(_PluginBase):
         if apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API令牌错误!")
 
-        logger.info(f"收到以下消息:\n{title}\n{text}")
-        if self._enabled and self._notify:
-            mtype = NotificationType.Manual
-            if self._msgtype:
-                mtype = NotificationType.__getitem__(str(self._msgtype)) or NotificationType.Manual
-            self.post_message(mtype=mtype,
-                              title=title,
-                              text=text)
+        try:
+            logger.info(f"收到以下消息:\n{title}\n{text}")
+            if self._enabled and self._notify:
+                mtype = NotificationType.Manual
+                if self._msgtype:
+                    mtype = NotificationType.__getitem__(str(self._msgtype)) or NotificationType.Manual
+                self.post_message(mtype=mtype,
+                                title=title,
+                                text=text)
+        except Exception as e:
+            logger.error(f"处理POST请求时发生异常: {str(e)}")
+            return schemas.Response(
+                success=False,
+                message=f"请求处理失败: {str(e)}"
+            )
 
         return schemas.Response(
             success=True,
             message="发送成功"
-        ).dict(by_alias=True, exclude_none=True, return_response=True)
+        )
 
     def get_state(self) -> bool:
         return self._enabled
