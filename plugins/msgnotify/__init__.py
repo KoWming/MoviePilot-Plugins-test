@@ -49,6 +49,7 @@ class MsgNotify(_PluginBase):
         if apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API令牌错误!")
         
+        apikey = request.apikey
         title = request.title
         text = request.text
         logger.info(f"收到以下消息:\n{title}\n{text}")
