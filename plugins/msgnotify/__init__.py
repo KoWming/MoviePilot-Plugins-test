@@ -2,10 +2,12 @@ from app.plugins import _PluginBase
 from typing import Any, List, Dict, Tuple
 from app.log import logger
 from app.schemas import NotificationType
+from app.core.config import settings
 from app import schemas
 from pydantic import BaseModel
 
 class NotifyRequest(BaseModel):
+    apikey: str
     title: str
     text: str
 
@@ -40,10 +42,13 @@ class MsgNotify(_PluginBase):
             self._notify = config.get("notify")
             self._msgtype = config.get("msgtype")
 
-    def msg_notify_json(self, request: NotifyRequest) -> schemas.Response:
+    def msg_notify_json(self, apikey: str, request: NotifyRequest) -> schemas.Response:
         """
-        发送通知
+        post 方式发送通知
         """
+        if apikey != settings.API_TOKEN:
+            return schemas.Response(success=False, message="API令牌错误!")
+        
         title = request.title
         text = request.text
         logger.info(f"收到以下消息:\n{title}\n{text}")
@@ -60,10 +65,13 @@ class MsgNotify(_PluginBase):
             message="发送成功"
         )
     
-    def msg_notify_form(self, title: str, text: str) -> schemas.Response:
+    def msg_notify_form(self, apikey: str, title: str, text: str) -> schemas.Response:
         """
-        发送通知
+        get 方式发送通知
         """
+        if apikey != settings.API_TOKEN:
+            return schemas.Response(success=False, message="API令牌错误!")
+
         logger.info(f"收到以下消息:\n{title}\n{text}")
         if self._enabled and self._notify:
             mtype = NotificationType.Manual
@@ -203,7 +211,20 @@ class MsgNotify(_PluginBase):
                                         'content': [
                                             {
                                                 'component': 'span',
-                                                'text': 'API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_json?apikey=api_token'
+                                                'text': 'GET_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_form?apikey=api_token'
+                                            },
+                                        ]
+                                    },
+                                    {
+                                        'component': 'VAlert',
+                                        'props': {
+                                            'type': 'success',
+                                            'variant': 'tonal'
+                                        },
+                                        'content': [
+                                            {
+                                                'component': 'span',
+                                                'text': 'POST_API接口地址：http://MoviePilot_IP:PORT/api/v1/plugin/MsgNotify/send_json?apikey=api_token'
                                             },
                                         ]
                                     }
@@ -299,7 +320,7 @@ class MsgNotify(_PluginBase):
         ], {
             "enabled": False,
             "notify": False,
-            "msgtype": ""
+            "msgtype": NotificationType.Manual
         }
 
     def get_page(self) -> List[dict]:
