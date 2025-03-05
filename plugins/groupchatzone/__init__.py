@@ -1,6 +1,7 @@
 import pytz
 import time
 import requests
+import threading
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional
 from urllib.parse import urljoin
@@ -20,7 +21,6 @@ from app.log import logger
 from app.plugins import _PluginBase
 from app.schemas.types import EventType, NotificationType
 from app.utils.timer import TimerUtils
-
 
 class GroupChatZone(_PluginBase):
     # 插件名称
@@ -60,8 +60,11 @@ class GroupChatZone(_PluginBase):
     _sites_messages: list = []
     _start_time: int = None
     _end_time: int = None
+    _lock = None
+    _running = False
 
     def init_plugin(self, config: dict = None):
+        self._lock = threading.Lock()
         self.sites = SitesHelper()
         self.siteoper = SiteOper()
         self.sitechain = SiteChain()
@@ -439,9 +442,19 @@ class GroupChatZone(_PluginBase):
         """
         自动向站点发送消息
         """
-        if self._chat_sites:
-            site_msgs = self.parse_site_messages(self._sites_messages)
-            self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
+        if not self._lock.acquire(blocking=False):
+            logger.warning("已有任务正在执行，本次调度跳过！")
+            return
+            
+        try:
+            self._running = True
+            if self._chat_sites:
+                site_msgs = self.parse_site_messages(self._sites_messages)
+                self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
+        finally:
+            self._running = False
+            self._lock.release()
+            logger.debug("任务执行完成，锁已释放")
 
     def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
         """
@@ -621,17 +634,19 @@ class GroupChatZone(_PluginBase):
                     logger.error(f"向 {site_name} 发送消息 '{message}' 失败，重试次数已达上限")
 
     def stop_service(self):
-        """
-        退出插件
-        """
+        """退出插件"""
         try:
             if self._scheduler:
+                if self._lock.locked():
+                    logger.info("等待当前任务执行完成...")
+                    self._lock.acquire()
+                    self._lock.release()
                 self._scheduler.remove_all_jobs()
                 if self._scheduler.running:
                     self._scheduler.shutdown()
                 self._scheduler = None
         except Exception as e:
-            logger.error("退出插件失败：%s" % str(e))
+            logger.error(f"退出插件失败：{str(e)}")
 
     @eventmanager.register(EventType.SiteDeleted)
     def site_deleted(self, event):
