@@ -2,6 +2,7 @@ import pytz
 import time
 import requests
 import threading
+from lxml import etree
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional
 from urllib.parse import urljoin
@@ -21,6 +22,181 @@ from app.log import logger
 from app.plugins import _PluginBase
 from app.schemas.types import EventType, NotificationType
 from app.utils.timer import TimerUtils
+
+class _RequestHelper:
+    """自定义请求工具类"""
+    
+    def __init__(self, plugin):
+        self.plugin = plugin
+        self.logger = plugin.logger
+        self.retries = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[403, 404, 500, 502, 503, 504],
+            allowed_methods=["GET", "POST"]
+        )
+        self.adapter = HTTPAdapter(max_retries=self.retries)
+
+    def request(self, method: str, url: str, **kwargs) -> requests.Response:
+        """统一请求方法"""
+        # 合并代理配置
+        proxies = kwargs.pop('proxies', None) or settings.PROXY
+        
+        # 配置默认超时
+        timeout = kwargs.pop('timeout', (3.05, 10))
+        
+        # 创建会话
+        with requests.Session() as session:
+            session.mount('https://', self.adapter)
+            session.proxies = proxies
+            
+            try:
+                response = session.request(
+                    method=method.upper(),
+                    url=url,
+                    timeout=timeout,
+                    **kwargs
+                )
+                response.raise_for_status()
+                self.logger.debug(f"请求成功: {method} {url}")
+                return response
+            except Exception as e:
+                self.logger.error(f"请求失败: {method} {url} - {str(e)}")
+                raise
+
+class NexusPHPHelper:
+    """NexusPHP站点操作增强工具类"""
+    
+    def __init__(self, site_info: dict):
+        """
+        :param site_info: 站点信息字典，包含url/cookie/ua等
+        """
+        # 初始化基础配置
+        self.url = site_info.get('url', '').rstrip('/')
+        self.cookie = site_info.get('cookie', '')
+        self.ua = site_info.get('ua', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0')
+        self.base_headers = {
+            "Cookie": self.cookie,
+            "Referer": self.url,
+            "User-Agent": self.ua
+        }
+        
+        # 初始化API端点
+        self.endpoints = {
+            'shoutbox': f"{self.url}/shoutbox.php",
+            'messages': f"{self.url}/messages.php",
+        }
+
+    def send_message(self, message: str) -> str:
+        """
+        发送群聊消息
+        :param message: 要发送的消息内容
+        :return: 操作结果描述
+        """
+        params = {
+            "shbox_text": message,
+            "shout": "我喊",
+            "sent": "yes",
+            "type": "shoutbox"
+        }
+        
+        try:
+            response = requests.get(
+                self.endpoints['shoutbox'],
+                params=params,
+                headers=self.base_headers,
+                timeout=15
+            )
+            response.raise_for_status()
+            
+            # 解析响应结果
+            return self._parse_response(response, lambda r: " ".join(
+                etree.HTML(r.text).xpath("//tr[1]/td//text()"))
+            )
+        except Exception as e:
+            logger.error(f"消息发送失败: {str(e)}")
+            return f"失败: {str(e)}"
+
+    def get_messages(self, count: int = 10) -> list:
+        """
+        获取最新群聊消息
+        :param count: 获取消息条数
+        :return: 消息列表
+        """
+        try:
+            response = requests.get(
+                self.endpoints['shoutbox'],
+                headers=self.base_headers,
+                timeout=10
+            )
+            response.raise_for_status()
+            
+            return self._parse_response(response, lambda r: [
+                "".join(item.xpath(".//text()")) 
+                for item in etree.HTML(r.text).xpath("//tr/td")[:count]
+            ])
+        except Exception as e:
+            logger.error(f"获取消息失败: {str(e)}")
+            return []
+
+    def get_message_list(self, rt_method: callable = None) -> list:
+        """获取站内信列表"""
+        try:
+            response = self.request.get(
+                url=self.endpoints['messages'],
+                headers=self.base_headers
+            )
+            
+            # 默认解析逻辑
+            if not rt_method:
+                rt_method = lambda res: [
+                    {
+                        "status": "".join(item.xpath("./td[1]/img/@title")),
+                        "topic": "".join(item.xpath("./td[2]//text()")),
+                        "from": "".join(item.xpath("./td[3]/text()")),
+                        "time": "".join(item.xpath("./td[4]//text()")),
+                        "id": "".join(item.xpath("./td[5]/input/@value"))
+                    }
+                    for item in etree.HTML(response.text).xpath("//form/table//tr")
+                ]
+                
+            return rt_method(response)
+        except Exception as e:
+            logger.error(f"获取站内信失败: {str(e)}")
+            return []
+
+    def set_message_read(self, message_id: str, rt_method: callable = None) -> bool:
+        """标记站内信为已读"""
+        try:
+            data = {
+                "action": "moveordel",
+                "messages[]": message_id,
+                "markread": "设为已读",
+                "box": "1"
+            }
+            
+            response = self.request.post(
+                url=self.endpoints['messages'],
+                headers=self.base_headers,
+                data=data
+            )
+            
+            # 默认成功判断
+            if not rt_method:
+                rt_method = lambda res: res.status_code == 200
+                
+            return rt_method(response)
+        except Exception as e:
+            logger.error(f"标记已读失败: {str(e)}")
+            return False
+
+    def _parse_response(self, response, parser: callable):
+        """统一响应解析方法"""
+        try:
+            return parser(response)
+        except Exception as e:
+            logger.error(f"响应解析失败: {str(e)}")
+            return "响应解析失败"
 
 class GroupChatZone(_PluginBase):
     # 插件名称
@@ -84,8 +260,11 @@ class GroupChatZone(_PluginBase):
 
 
             # 过滤掉已删除的站点
-            all_sites = [site.id for site in self.siteoper.list_order_by_pri()] + [site.get("id") for site in self.__custom_sites()]
-            self._chat_sites = [site_id for site_id in all_sites if site_id in self._chat_sites]
+            valid_site_ids = [str(site.get("id")) for site in self.get_all_sites()]
+            self._chat_sites = [
+                site_id for site_id in self._chat_sites 
+                if str(site_id) in valid_site_ids
+            ]
 
             # 保存配置
             self.__update_config()
@@ -128,6 +307,85 @@ class GroupChatZone(_PluginBase):
                 "sites_messages": self._sites_messages
             }
         )
+
+    def __custom_sites(self) -> List[Any]:
+        """获取自定义站点"""
+        custom_sites = []
+        custom_sites_config = self.get_config("CustomSites")
+        if custom_sites_config and custom_sites_config.get("enabled"):
+            custom_sites = custom_sites_config.get("sites")
+        return custom_sites
+
+    def get_all_sites(self) -> List[dict]:
+        """获取所有站点（内置+自定义）"""
+        builtin_sites = [
+            {
+                "id": site.id,
+                "name": site.name,
+                "url": site.url,
+                "cookie": site.cookie,
+                "ua": site.ua,
+                "proxy": site.proxy
+            } 
+            for site in self.siteoper.list_order_by_pri()
+        ]
+        return builtin_sites + self.__custom_sites()
+
+    def get_selected_sites(self) -> List[dict]:
+        """获取已选中的有效站点"""
+        all_sites = self.get_all_sites()
+        return [
+            site for site in all_sites
+            if str(site.get("id")) in map(str, self._chat_sites)
+        ]
+
+    def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
+        """解析输入的站点消息"""
+        result = {}
+        try:
+            # 获取已选站点的名称集合
+            selected_sites = self.get_selected_sites()
+            valid_site_names = {site.get("name").strip() for site in selected_sites}
+            
+            logger.debug(f"有效站点名称列表: {valid_site_names}")
+
+            # 按行解析配置
+            for line_num, line in enumerate(site_messages.strip().splitlines(), 1):
+                line = line.strip()
+                if not line:
+                    continue  # 跳过空行
+
+                # 分割配置项
+                parts = line.split("|")
+                if len(parts) < 2:
+                    logger.warning(f"第{line_num}行格式错误，缺少分隔符: {line}")
+                    continue
+
+                # 解析站点名称和消息
+                site_name = parts[0].strip()
+                messages = [msg.strip() for msg in parts[1:] if msg.strip()]
+                
+                if not messages:
+                    logger.warning(f"第{line_num}行 [{site_name}] 没有有效消息内容")
+                    continue
+
+                # 验证站点有效性
+                if site_name not in valid_site_names:
+                    logger.warning(f"第{line_num}行 [{site_name}] 不在选中站点列表中")
+                    continue
+
+                # 合并相同站点的消息
+                if site_name in result:
+                    result[site_name].extend(messages)
+                    logger.debug(f"合并重复站点 [{site_name}] 的消息，当前数量：{len(result[site_name])}")
+                else:
+                    result[site_name] = messages
+
+        except Exception as e:
+            logger.error(f"解析站点消息时出现异常: {str(e)}", exc_info=True)
+        finally:
+            logger.info(f"解析完成，共配置 {len(result)} 个有效站点的消息")
+            return result
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
@@ -428,210 +686,8 @@ class GroupChatZone(_PluginBase):
             "sites_messages": ""
         }
 
-    def __custom_sites(self) -> List[Any]:
-        custom_sites = []
-        custom_sites_config = self.get_config("CustomSites")
-        if custom_sites_config and custom_sites_config.get("enabled"):
-            custom_sites = custom_sites_config.get("sites")
-        return custom_sites
-
     def get_page(self) -> List[dict]:
         pass
-
-    def send_site_messages(self):
-        """
-        自动向站点发送消息
-        """
-        if not self._lock.acquire(blocking=False):
-            logger.warning("已有任务正在执行，本次调度跳过！")
-            return
-            
-        try:
-            self._running = True
-            if self._chat_sites:
-                site_msgs = self.parse_site_messages(self._sites_messages)
-                self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
-        finally:
-            self._running = False
-            self._lock.release()
-            logger.debug("任务执行完成，锁已释放")
-
-    def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
-        """
-        解析输入的站点消息
-        :param site_messages: 多行文本输入
-        :return: 字典，键为站点名称，值为该站点的消息
-        """
-        result = {}
-        try:
-            # 获取所有选中的站点名称
-            all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
-            selected_site_names = {site.get("name") for site in all_sites if site.get("id") in self._chat_sites}
-            logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
-
-            # 按行分割配置
-            for line in site_messages.strip().splitlines():
-                parts = line.split("|")
-                if len(parts) > 1:
-                    site_name = parts[0].strip()
-                    if site_name in selected_site_names:
-                        messages = [msg.strip() for msg in parts[1:] if msg.strip()]
-                        if messages:
-                            result[site_name] = messages
-                        else:
-                            logger.warn(f"站点 {site_name} 没有有效的消息内容")
-                    else:
-                        logger.warn(f"站点 {site_name} 不在选中列表中")
-                else:
-                    logger.warn(f"配置行格式错误，缺少分隔符: {line}")
-        except Exception as e:
-            logger.error(f"解析站点消息时出现异常: {str(e)}")
-        logger.info(f"站点消息解析完成，解析结果: {result}")
-        return result
-
-    def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]]):
-        """
-        发送消息逻辑
-        """
-        # 查询所有站点
-        all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
-        # 过滤掉没有选中的站点
-        do_sites = [site for site in all_sites if site.get("id") in do_sites] if do_sites else all_sites
-
-        if not do_sites:
-            logger.info("没有需要发送消息的站点！")
-            return
-
-        # 执行站点发送消息
-        site_results = {}
-        for site in do_sites:
-            site_name = site.get("name")
-            logger.info(f"开始处理站点: {site_name}")
-            messages = site_msgs.get(site_name, [])
-
-            # 添加消息列表空值检查
-            if not messages:
-                logger.warning(f"站点 {site_name} 没有需要发送的消息！")
-                continue
-
-            success_count = 0
-            failure_count = 0
-            failed_messages = []
-
-            for i, message in enumerate(messages):
-                try:
-                    self.send_message_to_site(site, message)
-                    success_count += 1
-                except Exception as e:
-                    logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
-                    failure_count += 1
-                    failed_messages.append(message)
-                # 修改间隔判断逻辑
-                if i < len(messages) - 1:
-                    logger.info(f"等待 {self._interval_cnt} 秒后继续发送下一条消息...")
-                    start_time = time.time()
-                    time.sleep(self._interval_cnt)
-                    logger.debug(f"实际等待时间：{time.time() - start_time:.2f} 秒")
-            
-            site_results[site_name] = {
-                "success_count": success_count,
-                "failure_count": failure_count,
-                "failed_messages": failed_messages
-            }
-
-        # 发送通知
-        if self._notify:
-            total_sites = len(do_sites)
-            notification_text = f"全部站点数量: {total_sites}\n"
-            for site_name, result in site_results.items():
-                success_count = result["success_count"]
-                failure_count = result["failure_count"]
-                failed_messages = result["failed_messages"]
-                notification_text += f"【{site_name}】成功发送{success_count}条信息，失败{failure_count}条\n"
-                if failed_messages:
-                    notification_text += f"失败的消息: {', '.join(failed_messages)}\n"
-            notification_text += f"\n{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
-
-            self.post_message(
-                mtype=NotificationType.SiteMessage,
-                title="【执行喊话任务完成】:",
-                text=notification_text
-            )
-
-        # 检查是否所有消息都发送成功
-        all_successful = all(result["success_count"] == len(messages) for site_name, messages in site_msgs.items() if (result := site_results.get(site_name)))
-        if all_successful:
-            logger.info("所有站点的消息发送成功。")
-        else:
-            logger.info("部分消息发送失败！！！")
-
-        self.__update_config()
-
-    def send_message_to_site(self, site_info: CommentedMap, message: str):
-
-        if not site_info:
-            logger.error("无效的站点信息！")
-            return
-
-        # 站点信息
-        site_name = site_info.get("name", "").strip()
-        site_url = site_info.get("url", "").strip()
-        site_cookie = site_info.get("cookie", "").strip()
-        ua = site_info.get("ua", "").strip()
-        proxies = settings.PROXY if site_info.get("proxy") else None
-
-        if not all([site_name, site_url, site_cookie, ua]):
-            logger.error(f"站点 {site_name} 缺少必要信息，无法发送消息！")
-            return
-
-        send_url = urljoin(site_url, "/shoutbox.php")
-        headers = {
-            'User-Agent': ua,
-            'Cookie': site_cookie,
-            'Referer': site_url
-        }
-        params = {
-            'shbox_text': message,
-            'shout': '我喊',
-            'sent': 'yes',
-            'type': 'shoutbox'
-        }
-
-        # 配置重试策略
-        retries = Retry(
-            total=3,  # 总重试次数
-            backoff_factor=1,  # 重试间隔时间因子
-            status_forcelist=[403, 404, 500, 502, 503, 504],  # 需要重试的状态码
-            allowed_methods=["GET"],  # 需要重试的HTTP方法
-            raise_on_status=False  # 不在重试时抛出异常，手动处理
-        )
-        adapter = HTTPAdapter(max_retries=retries)
-
-        # 使用 Session 对象复用，创建会话对象
-        with requests.Session() as session:
-            session.headers.update(headers)
-            session.proxies = proxies
-            session.mount('https://', adapter)
-            
-            attempt = 0
-            while attempt < retries.total:
-                try:
-                    response = session.get(send_url, params=params, timeout=(3.05, 10))
-                    response.raise_for_status()  # 自动处理 4xx/5xx 状态码
-                    logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
-                    break
-                except requests.exceptions.HTTPError as http_err:
-                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，HTTP 错误: {http_err}")
-                except requests.exceptions.RequestException as req_err:
-                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {req_err}")
-                
-                attempt += 1
-                if attempt < retries.total:
-                    backoff_time = retries.get_backoff_time(attempt)
-                    logger.info(f"重试 {attempt}/{retries.total}，将在 {backoff_time} 秒后重试...")
-                    time.sleep(backoff_time)
-                else:
-                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，重试次数已达上限")
 
     def stop_service(self):
         """退出插件"""
@@ -647,33 +703,3 @@ class GroupChatZone(_PluginBase):
                 self._scheduler = None
         except Exception as e:
             logger.error(f"退出插件失败：{str(e)}")
-
-    @eventmanager.register(EventType.SiteDeleted)
-    def site_deleted(self, event):
-        """
-        删除对应站点选中
-        """
-        site_id = event.event_data.get("site_id")
-        config = self.get_config()
-        if config:
-            self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
-            # 保存配置
-            self.__update_config()
-
-    def __remove_site_id(self, do_sites, site_id):
-        if do_sites:
-            if isinstance(do_sites, str):
-                do_sites = [do_sites]
-
-            # 删除对应站点
-            if site_id:
-                do_sites = [site for site in do_sites if int(site) != int(site_id)]
-            else:
-                # 清空
-                do_sites = []
-
-            # 若无站点，则停止
-            if len(do_sites) == 0:
-                self._enabled = False
-
-        return do_sites
