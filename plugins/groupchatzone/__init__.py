@@ -429,25 +429,19 @@ class GroupChatZone(_PluginBase):
                             send_result = nexus_helper.send_message(message)
                             logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {send_result}")
                             
-                            # 获取最新的群聊消息
-                            latest_messages = nexus_helper.get_messages(count=1)
-                            if latest_messages:
-                                latest_message = latest_messages[0]
-                                if message not in latest_message:
-                                    logger.warning(f"站点 {site_name} 最新消息中未找到预期消息 '{message}'，检查站内信")
-                                    
-                                    # 获取站内信列表
-                                    message_list = nexus_helper.get_message_list()
-                                    if message_list:
-                                        for msg in message_list:
-                                            topic = msg.get("topic", "")
-                                            if message in topic:
-                                                # 标记站内信为已读
-                                                read_result = nexus_helper.set_message_read(msg.get("id", ""))
-                                                logger.info(f"站点 {site_name} 标记站内信 {msg.get('id', '')} 为已读: {read_result}")
-                                                break
-                            else:
-                                logger.warning(f"站点 {site_name} 获取最新群聊消息失败")
+                            if site_name == "象站":
+                                # 获取站内信列表
+                                message_list = nexus_helper.get_message_list()
+                                if message_list:
+                                    for msg in message_list:
+                                        topic = msg.get("topic", "")
+                                        if message in topic:
+                                            # 标记站内信为已读
+                                            read_result = nexus_helper.set_message_read(msg.get("id", ""))
+                                            logger.info(f"站点 {site_name} 标记站内信 {msg.get('id', '')} 为已读: {read_result}")
+                                            break
+                                else:
+                                    logger.warning(f"站点 {site_name} 获取站内信列表失败")
                         except Exception as e:
                             logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
                         finally:
