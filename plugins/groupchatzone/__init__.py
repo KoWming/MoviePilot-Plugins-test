@@ -244,6 +244,7 @@ class GroupChatZone(_PluginBase):
     _end_time: int = None
     _lock = None
     _running = False
+    logger = logger
 
     def init_plugin(self, config: dict = None):
         self._lock = threading.Lock()
