@@ -67,9 +67,10 @@ class _RequestHelper:
 class NexusPHPHelper:
     """NexusPHP站点操作增强工具类"""
     
-    def __init__(self, site_info: dict):
+    def __init__(self, site_info: dict, request_helper: '_RequestHelper'):
         """
         :param site_info: 站点信息字典，包含url/cookie/ua等
+        :param request_helper: 请求工具类实例
         """
         # 初始化基础配置
         self.url = site_info.get('url', '').rstrip('/')
@@ -86,6 +87,9 @@ class NexusPHPHelper:
             'shoutbox': f"{self.url}/shoutbox.php",
             'messages': f"{self.url}/messages.php",
         }
+        
+        # 请求工具类
+        self.request_helper = request_helper
 
     def send_message(self, message: str) -> str:
         """
@@ -101,13 +105,13 @@ class NexusPHPHelper:
         }
         
         try:
-            response = requests.get(
-                self.endpoints['shoutbox'],
+            response = self.request_helper.request(
+                method="GET",
+                url=self.endpoints['shoutbox'],
                 params=params,
                 headers=self.base_headers,
                 timeout=15
             )
-            response.raise_for_status()
             
             # 解析响应结果
             return self._parse_response(response, lambda r: " ".join(
@@ -124,12 +128,12 @@ class NexusPHPHelper:
         :return: 消息列表
         """
         try:
-            response = requests.get(
-                self.endpoints['shoutbox'],
+            response = self.request_helper.request(
+                method="GET",
+                url=self.endpoints['shoutbox'],
                 headers=self.base_headers,
                 timeout=10
             )
-            response.raise_for_status()
             
             return self._parse_response(response, lambda r: [
                 "".join(item.xpath(".//text()")) 
@@ -142,7 +146,8 @@ class NexusPHPHelper:
     def get_message_list(self, rt_method: callable = None) -> list:
         """获取站内信列表"""
         try:
-            response = self.request.get(
+            response = self.request_helper.request(
+                method="GET",
                 url=self.endpoints['messages'],
                 headers=self.base_headers
             )
@@ -175,7 +180,8 @@ class NexusPHPHelper:
                 "box": "1"
             }
             
-            response = self.request.post(
+            response = self.request_helper.request(
+                method="POST",
                 url=self.endpoints['messages'],
                 headers=self.base_headers,
                 data=data
@@ -206,7 +212,7 @@ class GroupChatZone(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/GroupChat.png"
     # 插件版本
-    plugin_version = "1.2.5"
+    plugin_version = "1.2.6"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -386,6 +392,40 @@ class GroupChatZone(_PluginBase):
         finally:
             logger.info(f"解析完成，共配置 {len(result)} 个有效站点的消息")
             return result
+
+    def send_site_messages(self):
+        """
+        发送站点消息
+        """
+        # 获取选中的站点信息
+        selected_sites = self.get_selected_sites()
+        
+        # 解析站点消息
+        site_messages = self.parse_site_messages(self._sites_messages)
+        
+        # 初始化请求工具类
+        request_helper = _RequestHelper(self)
+        
+        for site in selected_sites:
+            site_name = site.get("name")
+            messages = site_messages.get(site_name)
+            
+            if not messages:
+                logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
+                continue
+            
+            # 初始化NexusPHPHelper
+            nexus_helper = NexusPHPHelper(site_info=site, request_helper=request_helper)
+            
+            for message in messages:
+                try:
+                    result = nexus_helper.send_message(message)
+                    logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {result}")
+                except Exception as e:
+                    logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
+                finally:
+                    # 等待间隔时间
+                    time.sleep(self._interval_cnt)
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
