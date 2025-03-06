@@ -397,35 +397,41 @@ class GroupChatZone(_PluginBase):
         """
         发送站点消息
         """
-        # 获取选中的站点信息
-        selected_sites = self.get_selected_sites()
-        
-        # 解析站点消息
-        site_messages = self.parse_site_messages(self._sites_messages)
-        
-        # 初始化请求工具类
-        request_helper = _RequestHelper(self)
-        
-        for site in selected_sites:
-            site_name = site.get("name")
-            messages = site_messages.get(site_name)
+        try:
+            # 获取选中的站点信息
+            selected_sites = self.get_selected_sites()
             
-            if not messages:
-                logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
-                continue
+            # 解析站点消息
+            site_messages = self.parse_site_messages(self._sites_messages)
             
-            # 初始化NexusPHPHelper
-            nexus_helper = NexusPHPHelper(site_info=site, request_helper=request_helper)
+            # 初始化请求工具类
+            request_helper = _RequestHelper(self)
             
-            for message in messages:
+            for site in selected_sites:
                 try:
-                    result = nexus_helper.send_message(message)
-                    logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {result}")
+                    site_name = site.get("name")
+                    messages = site_messages.get(site_name)
+                    
+                    if not messages:
+                        logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
+                        continue
+                    
+                    # 初始化NexusPHPHelper
+                    nexus_helper = NexusPHPHelper(site_info=site, request_helper=request_helper)
+                    
+                    for message in messages:
+                        try:
+                            result = nexus_helper.send_message(message)
+                            logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {result}")
+                        except Exception as e:
+                            logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
+                        finally:
+                            # 等待间隔时间
+                            time.sleep(self._interval_cnt)
                 except Exception as e:
-                    logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
-                finally:
-                    # 等待间隔时间
-                    time.sleep(self._interval_cnt)
+                    logger.error(f"处理站点 {site.get('name')} 时发生错误: {str(e)}")
+        except Exception as e:
+            logger.error(f"发送站点消息时发生全局错误: {str(e)}")
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
