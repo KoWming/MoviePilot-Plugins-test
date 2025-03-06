@@ -154,7 +154,7 @@ class NexusPHPHelper:
             
             # 默认解析逻辑
             if not rt_method:
-                rt_method = lambda res: [
+                rt_method = lambda response: [
                     {
                         "status": "".join(item.xpath("./td[1]/img/@title")),
                         "topic": "".join(item.xpath("./td[2]//text()")),
