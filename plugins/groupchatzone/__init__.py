@@ -114,8 +114,8 @@ class NexusPHPHelper:
             )
             
             # 解析响应结果
-            return self._parse_response(response, lambda r: " ".join(
-                etree.HTML(r.text).xpath("//tr[1]/td//text()"))
+            return self._parse_response(response, lambda response: " ".join(
+                etree.HTML(response.text).xpath("//tr[1]/td//text()"))
             )
         except Exception as e:
             logger.error(f"消息发送失败: {str(e)}")
@@ -123,7 +123,7 @@ class NexusPHPHelper:
 
     def get_messages(self, count: int = 10) -> list:
         """
-        获取最新群聊消息列表
+        获取最新群聊消息
         :param count: 获取消息条数
         :return: 消息列表
         """
@@ -135,46 +135,39 @@ class NexusPHPHelper:
                 timeout=10
             )
             
-            return self._parse_response(response, lambda r: [
+            return self._parse_response(response, lambda response: [
                 "".join(item.xpath(".//text()")) 
-                for item in etree.HTML(r.text).xpath("//tr/td")[:count]
+                for item in etree.HTML(response.text).xpath("//tr/td")[:count]
             ])
         except Exception as e:
             logger.error(f"获取消息失败: {str(e)}")
             return []
 
-    def get_message_list(self, rt_method: callable = None):
-        """
-        获取站内信列表
-        :param rt_method: 自定义结果处理函数
-        :return: 站内信列表
-        """
-        url = self.endpoints['messages']
-        
+    def get_message_list(self, rt_method: callable = None) -> list:
+        """获取站内信列表"""
         try:
             response = self.request_helper.request(
                 method="GET",
-                url=url,
-                headers=self.base_headers,
-                timeout=15
+                url=self.endpoints['messages'],
+                headers=self.base_headers
             )
             
             # 默认解析逻辑
             if not rt_method:
-                rt_method = lambda res: [
+                rt_method = lambda response: [
                     {
                         "status": "".join(item.xpath("./td[1]/img/@title")),
                         "topic": "".join(item.xpath("./td[2]//text()")),
                         "from": "".join(item.xpath("./td[3]/text()")),
                         "time": "".join(item.xpath("./td[4]//text()")),
                         "id": "".join(item.xpath("./td[5]/input/@value"))
-                    } 
-                    for item in etree.HTML(res.text).xpath("//form/table//tr")
+                    }
+                    for item in etree.HTML(response.text).xpath("//form/table//tr")
                 ]
                 
-            return self._parse_response(response, rt_method)
+            return rt_method(response)
         except Exception as e:
-            logger.error(f"获取站内信列表失败: {str(e)}")
+            logger.error(f"获取站内信失败: {str(e)}")
             return []
 
     def set_message_read(self, message_id: str, rt_method: callable = None) -> bool:
@@ -196,7 +189,7 @@ class NexusPHPHelper:
             
             # 默认成功判断
             if not rt_method:
-                rt_method = lambda res: res.status_code == 200
+                rt_method = lambda response: response.status_code == 200
                 
             return rt_method(response)
         except Exception as e:
@@ -251,6 +244,9 @@ class GroupChatZone(_PluginBase):
     _end_time: int = None
     _lock = None
     _running = False
+    _preset_sites = {
+        "象站": True,
+    }
 
     def __init__(self):
         super().__init__()
@@ -379,25 +375,24 @@ class GroupChatZone(_PluginBase):
                     continue
 
                 # 解析站点名称和消息
-                site_name_with_flag = parts[0].strip()
+                site_name = parts[0].strip()
                 messages = [msg.strip() for msg in parts[1:] if msg.strip()]
                 
                 if not messages:
-                    logger.warning(f"第{line_num}行 [{site_name_with_flag}] 没有有效消息内容")
+                    logger.warning(f"第{line_num}行 [{site_name}] 没有有效消息内容")
                     continue
 
                 # 验证站点有效性
-                site_name = site_name_with_flag[2:]  # 去掉前面的标志字符和分隔符
                 if site_name not in valid_site_names:
                     logger.warning(f"第{line_num}行 [{site_name}] 不在选中站点列表中")
                     continue
 
                 # 合并相同站点的消息
-                if site_name_with_flag in result:
-                    result[site_name_with_flag].extend(messages)
-                    logger.debug(f"合并重复站点 [{site_name_with_flag}] 的消息，当前数量：{len(result[site_name_with_flag])}")
+                if site_name in result:
+                    result[site_name].extend(messages)
+                    logger.debug(f"合并重复站点 [{site_name}] 的消息，当前数量：{len(result[site_name])}")
                 else:
-                    result[site_name_with_flag] = messages
+                    result[site_name] = messages
 
         except Exception as e:
             logger.error(f"解析站点消息时出现异常: {str(e)}", exc_info=True)
@@ -422,47 +417,43 @@ class GroupChatZone(_PluginBase):
             for site in selected_sites:
                 try:
                     site_name = site.get("name")
-                    # 查找带有前缀的站点名称
-                    site_name_with_flag = None
-                    for key in site_messages.keys():
-                        if key[2:] == site_name:  # 去掉前缀和分隔符
-                            site_name_with_flag = key
-                            break
+                    messages = site_messages.get(site_name)
                     
-                    if not site_name_with_flag:
+                    if not messages:
                         logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
                         continue
-                    
-                    messages = site_messages.get(site_name_with_flag)
                     
                     # 初始化NexusPHPHelper
                     nexus_helper = NexusPHPHelper(site_info=site, request_helper=request_helper)
                     
                     for message in messages:
                         try:
-                            # 发送消息
-                            send_result = nexus_helper.send_message(message)
-                            logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {send_result}")
-                            
-                            # 根据站点名称前面的字符调用不同的方法
-                            if site_name_with_flag.startswith('L|'):
-                                # 调用 get_messages 获取群聊消息
-                                messages_result = nexus_helper.get_messages()
-                                logger.info(f"站点 {site_name} 群聊消息: {messages_result}")
-                            elif site_name_with_flag.startswith('Y|'):
-                                # 调用 get_message_list 获取站内信列表
+                            # 检查站点名称是否在预设站点名称字典中
+                            if site_name in self._preset_sites:
+                                # 发送消息
+                                send_result = nexus_helper.send_message(message)
+                                logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {send_result}")
+                                
+                                # 获取站内信列表
                                 message_list = nexus_helper.get_message_list()
                                 if message_list:
                                     for msg in message_list:
                                         topic = msg.get("topic", "")
-                                        content = msg.get("topic", "")  # 假设站内信内容在 topic 字段中
-                                        logger.info(f"站点 {site_name} 站内信内容: {content}")
-                                        
-                                        # 标记站内信为已读
-                                        read_result = nexus_helper.set_message_read(msg.get("id", ""))
-                                        logger.info(f"站点 {site_name} 标记站内信 {msg.get('id', '')} 为已读: {read_result}")
+                                        if message in topic:
+                                            # 标记站内信为已读
+                                            read_result = nexus_helper.set_message_read(msg.get("id", ""))
+                                            logger.info(f"站点 {site_name} 标记站内信 {msg.get('id', '')} 为已读: {read_result}")
+                                            break
                                 else:
                                     logger.warning(f"站点 {site_name} 获取站内信列表失败")
+                            else:
+                                # 发送消息
+                                send_result = nexus_helper.send_message(message)
+                                logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {send_result}")
+                                
+                                # 获取最新群聊消息
+                                chat_messages = nexus_helper.get_messages()
+                                logger.info(f"站点 {site_name} 获取最新群聊消息: {chat_messages}")
                         except Exception as e:
                             logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
                         finally:
