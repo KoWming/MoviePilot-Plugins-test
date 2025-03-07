@@ -503,23 +503,14 @@ class GroupChatZone(_PluginBase):
         try:
             # 获取选中的站点信息
             selected_sites = self.get_selected_sites()
-            
-            # 解析站点消息
-            site_messages = self.parse_site_messages(self._sites_messages)
-            
+
             # 获取预设站点名称集合
             preset_site_names = set(self._preset_sites.keys())
             
             for site in selected_sites:
                 try:
                     site_name = site.get("name")
-                    messages = site_messages.get(site_name)
-                    
-                    if not messages:
-                        logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
-                        continue
-                    
-                    # 根据站点名称选择发送方法
+                    self.logger.info(f"站点 {site_name} 在预设站点列表中")
                     if site_name in preset_site_names:
                         self.mail_shotbox()
                     else:
