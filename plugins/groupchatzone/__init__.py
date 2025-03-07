@@ -409,24 +409,23 @@ class GroupChatZone(_PluginBase):
             return result
 
     def mail_shotbox(self):
-        # 解析站点消息
         site_messages = self.parse_site_messages(self._sites_messages)
-        
-        # 初始化请求工具类
         request_helper = _RequestHelper(self)
-        
         rsp_text_list = []
         
-        # 遍历每个站点
         for site in self.get_selected_sites():
             site_name = site.get("name")
+            
+            if site_name not in self._preset_sites:
+                self.logger.warning(f"站点 {site_name} 非预设站点，已跳过")
+                continue
+                
             messages = site_messages.get(site_name)
             
             if not messages:
                 self.logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
                 continue
-            
-            # 初始化NexusPHPHelper
+                
             nexus_helper = NexusPHPHelper(site_info=site, request_helper=request_helper)
             
             for message in messages:
@@ -456,24 +455,23 @@ class GroupChatZone(_PluginBase):
         return "\n".join(rsp_text_list)
     
     def list_shotbox(self):
-        # 解析站点消息
         site_messages = self.parse_site_messages(self._sites_messages)
-        
-        # 初始化请求工具类
         request_helper = _RequestHelper(self)
-        
         rsp_text_list = []
         
-        # 遍历每个站点
         for site in self.get_selected_sites():
             site_name = site.get("name")
+            
+            if site_name in self._preset_sites:
+                self.logger.warning(f"站点 {site_name} 属于预设站点，将跳过执行稍后在发送")
+                continue
+                
             messages = site_messages.get(site_name)
             
             if not messages:
-                self.logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
+                self.logger.warning(f"站点 {site_name} 没有配置消息，已跳过")
                 continue
-            
-            # 初始化NexusPHPHelper
+                
             nexus_helper = NexusPHPHelper(site_info=site, request_helper=request_helper)
             
             for message in messages:
