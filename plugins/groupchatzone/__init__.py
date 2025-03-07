@@ -408,6 +408,94 @@ class GroupChatZone(_PluginBase):
             logger.info(f"解析完成，共配置 {len(result)} 个有效站点的消息")
             return result
 
+    def mail_shotbox(self):
+        # 解析站点消息
+        site_messages = self.parse_site_messages(self._sites_messages)
+        
+        # 初始化请求工具类
+        request_helper = _RequestHelper(self)
+        
+        rsp_text_list = []
+        
+        # 遍历每个站点
+        for site in self.get_selected_sites():
+            site_name = site.get("name")
+            messages = site_messages.get(site_name)
+            
+            if not messages:
+                self.logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
+                continue
+            
+            # 初始化NexusPHPHelper
+            nexus_helper = NexusPHPHelper(site_info=site, request_helper=request_helper)
+            
+            for message in messages:
+                try:
+                    # 发送消息
+                    result = nexus_helper.send_message(message)
+                    self.logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {result}")
+                    
+                    # 获取消息列表
+                    message_list = nexus_helper.get_message_list()
+                    if message_list:
+                        # 获取响应消息
+                        message = message_list[1].get("topic", "")
+                        rsp_text_list.append(message)
+                        
+                        # 标记消息为已读
+                        message_id = message_list[1].get("id", "")
+                        if message_id:
+                            read_result = nexus_helper.set_message_read(message_id)
+                            self.logger.info(f"标记消息 {message_id} 为已读: {read_result}")
+                except Exception as e:
+                    self.logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
+                finally:
+                    # 等待间隔时间
+                    time.sleep(self._interval_cnt)
+        
+        return "\n".join(rsp_text_list)
+    
+    def list_shotbox(self):
+        # 解析站点消息
+        site_messages = self.parse_site_messages(self._sites_messages)
+        
+        # 初始化请求工具类
+        request_helper = _RequestHelper(self)
+        
+        rsp_text_list = []
+        
+        # 遍历每个站点
+        for site in self.get_selected_sites():
+            site_name = site.get("name")
+            messages = site_messages.get(site_name)
+            
+            if not messages:
+                self.logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
+                continue
+            
+            # 初始化NexusPHPHelper
+            nexus_helper = NexusPHPHelper(site_info=site, request_helper=request_helper)
+            
+            for message in messages:
+                try:
+                    # 发送消息
+                    result = nexus_helper.send_message(message)
+                    self.logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {result}")
+                    
+                    # 获取消息列表
+                    message_list = nexus_helper.get_messages()
+                    if message_list:
+                        # 获取响应消息
+                        message = message_list[0]
+                        rsp_text_list.append(message)
+                except Exception as e:
+                    self.logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
+                finally:
+                    # 等待间隔时间
+                    time.sleep(self._interval_cnt)
+        
+        return "\n".join(rsp_text_list)
+
     def send_site_messages(self):
         """
         发送站点消息
@@ -419,8 +507,8 @@ class GroupChatZone(_PluginBase):
             # 解析站点消息
             site_messages = self.parse_site_messages(self._sites_messages)
             
-            # 初始化请求工具类
-            request_helper = _RequestHelper(self)
+            # 获取预设站点名称集合
+            preset_site_names = set(self._preset_sites.keys())
             
             for site in selected_sites:
                 try:
@@ -431,42 +519,12 @@ class GroupChatZone(_PluginBase):
                         logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
                         continue
                     
-                    # 初始化NexusPHPHelper
-                    nexus_helper = NexusPHPHelper(site_info=site, request_helper=request_helper)
+                    # 根据站点名称选择发送方法
+                    if site_name in preset_site_names:
+                        self.mail_shotbox()
+                    else:
+                        self.list_shotbox()
                     
-                    for message in messages:
-                        try:
-                            # 检查站点名称是否在预设站点名称字典中
-                            if site_name in self._preset_sites:
-                                # 发送消息
-                                send_result = nexus_helper.send_message(message)
-                                logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {send_result}")
-                                
-                                # 获取站内信列表
-                                message_list = nexus_helper.get_message_list()
-                                if message_list:
-                                    for msg in message_list:
-                                        topic = msg.get("topic", "")
-                                        if message in topic:
-                                            # 标记站内信为已读
-                                            read_result = nexus_helper.set_message_read(msg.get("id", ""))
-                                            logger.info(f"站点 {site_name} 标记站内信 {msg.get('id', '')} 为已读: {read_result}")
-                                            break
-                                else:
-                                    logger.warning(f"站点 {site_name} 获取站内信列表失败")
-                            else:
-                                # 发送消息
-                                send_result = nexus_helper.send_message(message)
-                                logger.info(f"向站点 {site_name} 发送消息 '{message}' 结果: {send_result}")
-                                
-                                # 获取最新群聊消息
-                                chat_messages = nexus_helper.get_messages()
-                                logger.info(f"站点 {site_name} 获取最新群聊消息: {chat_messages}")
-                        except Exception as e:
-                            logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
-                        finally:
-                            # 等待间隔时间
-                            time.sleep(self._interval_cnt)
                 except Exception as e:
                     logger.error(f"处理站点 {site.get('name')} 时发生错误: {str(e)}")
         except Exception as e:
