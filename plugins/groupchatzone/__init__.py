@@ -152,6 +152,9 @@ class NexusPHPHelper:
                 headers=self.base_headers
             )
             
+            # 打印响应内容以调试
+            logger.debug(f"响应内容: {response.text[:500]}")  # 打印前500个字符
+            
             # 默认解析逻辑
             if not rt_method:
                 rt_method = lambda response: [
@@ -165,7 +168,12 @@ class NexusPHPHelper:
                     for item in etree.HTML(response.text).xpath("//form/table//tr")
                 ]
                 
-            return rt_method(response)
+            message_list = rt_method(response)
+            
+            # 打印解析结果以调试
+            logger.debug(f"解析结果: {message_list}")
+            
+            return message_list
         except Exception as e:
             logger.error(f"获取站内信失败: {str(e)}")
             return []
