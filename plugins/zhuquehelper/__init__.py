@@ -229,7 +229,6 @@ class ZhuqueHelper(_PluginBase):
             # 读取历史记录
             history = self.get_data('sign_dict') or []
             if not isinstance(history, list):
-                logger.error(f"历史记录格式不正确，重置为空列表。当前类型: {type(history)}")
                 history = []
                 
             history.append(sign_dict)
@@ -240,7 +239,7 @@ class ZhuqueHelper(_PluginBase):
                 history = [record for record in history if
                           datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
             
-            self.save_data(key="sign_dict", value=history)
+            self.save_data('sign_dict', history)
         except Exception as e:
             logger.error(f"保存执行记录时发生异常: {e}")
 
@@ -625,6 +624,41 @@ class ZhuqueHelper(_PluginBase):
         # 按照签到时间倒序
         historys = sorted(historys, key=lambda x: x.get("date", ""), reverse=True)
 
+        # 签到消息
+        sign_msgs = []
+        for history in historys:
+            sign_msgs.append({
+                'component': 'tr',
+                'props': {
+                    'class': 'text-sm'
+                },
+                'content': [
+                    {
+                        'component': 'td',
+                        'props': {
+                            'class': 'whitespace-nowrap break-keep text-high-emphasis'
+                        },
+                        'text': history.get("date", "")
+                    },
+                    {
+                        'component': 'td',
+                        'text': history.get("username", "")
+                    },
+                    {
+                        'component': 'td',
+                        'text': history.get("min_level", "")
+                    },
+                    {
+                        'component': 'td',
+                        'text': f"{history.get('skill_release_bonus', 0)} 💎"
+                    },
+                    {
+                        'component': 'td',
+                        'text': f"{history.get('bonus', 0)} 💎"
+                    }
+                ]
+            })
+
         return [
             {
                 'component': 'VRow',
@@ -645,82 +679,45 @@ class ZhuqueHelper(_PluginBase):
                                         'component': 'thead',
                                         'content': [
                                             {
-                                                'component': 'tr',
-                                                'content': [
-                                                    {
-                                                        'component': 'th',
-                                                        'props': {
-                                                            'class': 'text-start ps-4'
-                                                        },
-                                                        'text': '时间'
-                                                    },
-                                                    {
-                                                        'component': 'th',
-                                                        'props': {
-                                                            'class': 'text-start ps-4'
-                                                        },
-                                                        'text': '用户名'
-                                                    },
-                                                    {
-                                                        'component': 'th',
-                                                        'props': {
-                                                            'class': 'text-start ps-4'
-                                                        },
-                                                        'text': '当前角色最低等级'
-                                                    },
-                                                    {
-                                                        'component': 'th',
-                                                        'props': {
-                                                            'class': 'text-start ps-4'
-                                                        },
-                                                        'text': '本次释放获得的灵石'
-                                                    },
-                                                    {
-                                                        'component': 'th',
-                                                        'props': {
-                                                            'class': 'text-start ps-4'
-                                                        },
-                                                        'text': '当前账户灵石余额'
-                                                    }
-                                                ]
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '时间'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '用户名'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '当前角色最低等级'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '本次释放获得的灵石'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '当前账户灵石余额'
                                             }
                                         ]
                                     },
                                     {
                                         'component': 'tbody',
-                                        'content': [
-                                            {
-                                                'component': 'tr',
-                                                'props': {
-                                                    'class': 'text-sm'
-                                                },
-                                                'content': [
-                                                    {
-                                                        'component': 'td',
-                                                        'props': {
-                                                            'class': 'whitespace-nowrap break-keep text-high-emphasis'
-                                                        },
-                                                        'text': history.get("date", "")
-                                                    },
-                                                    {
-                                                        'component': 'td',
-                                                        'text': history.get("username", "")
-                                                    },
-                                                    {
-                                                        'component': 'td',
-                                                        'text': history.get("min_level", "")
-                                                    },
-                                                    {
-                                                        'component': 'td',
-                                                        'text': f"{history.get('skill_release_bonus', 0)} 💎"
-                                                    },
-                                                    {
-                                                        'component': 'td',
-                                                        'text': f"{history.get('bonus', 0)} 💎"
-                                                    }
-                                                ]
-                                            } for history in historys
-                                        ]
+                                        'content': sign_msgs
                                     }
                                 ]
                             }
