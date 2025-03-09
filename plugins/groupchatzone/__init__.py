@@ -1,216 +1,23 @@
 import pytz
 import time
-import requests
 import threading
-from lxml import etree
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional
-from urllib.parse import urljoin
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from ruamel.yaml import CommentedMap
 
 from app.chain.site import SiteChain
 from app.core.config import settings
-from app.core.event import eventmanager
 from app.db.site_oper import SiteOper
 from app.helper.sites import SitesHelper
 from app.log import logger
 from app.plugins import _PluginBase
-from app.schemas.types import EventType, NotificationType
 from app.utils.timer import TimerUtils
 
-class _RequestHelper:
-    """自定义请求工具类"""
-    
-    def __init__(self, plugin):
-        self.plugin = plugin
-        self.logger = plugin.logger
-        self.retries = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[403, 404, 500, 502, 503, 504],
-            allowed_methods=["GET", "POST"]
-        )
-        self.adapter = HTTPAdapter(max_retries=self.retries)
-
-    def request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """统一请求方法"""
-        # 合并代理配置
-        proxies = kwargs.pop('proxies', None) or settings.PROXY
-        
-        # 配置默认超时
-        timeout = kwargs.pop('timeout', (3.05, 10))
-        
-        # 创建会话
-        with requests.Session() as session:
-            session.mount('https://', self.adapter)
-            session.proxies = proxies
-            
-            try:
-                response = session.request(
-                    method=method.upper(),
-                    url=url,
-                    timeout=timeout,
-                    **kwargs
-                )
-                response.raise_for_status()
-                self.logger.debug(f"请求成功: {method} {url}")
-                return response
-            except Exception as e:
-                self.logger.error(f"请求失败: {method} {url} - {str(e)}")
-                raise
-
-class NexusPHPHelper:
-    """NexusPHP站点操作增强工具类"""
-    
-    def __init__(self, site_info: dict, request_helper: '_RequestHelper'):
-        """
-        :param site_info: 站点信息字典，包含url/cookie/ua等
-        :param request_helper: 请求工具类实例
-        """
-        # 初始化基础配置
-        self.url = site_info.get('url', '').rstrip('/')
-        self.cookie = site_info.get('cookie', '')
-        self.ua = site_info.get('ua', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0')
-        self.base_headers = {
-            "Cookie": self.cookie,
-            "Referer": self.url,
-            "User-Agent": self.ua
-        }
-        
-        # 初始化API端点
-        self.endpoints = {
-            'shoutbox': f"{self.url}/shoutbox.php",
-            'messages': f"{self.url}/messages.php",
-        }
-        
-        # 请求工具类
-        self.request_helper = request_helper
-
-    def send_message(self, message: str) -> str:
-        """
-        发送群聊消息
-        :param message: 要发送的消息内容
-        :return: 操作结果描述
-        """
-        params = {
-            "shbox_text": message,
-            "shout": "我喊",
-            "sent": "yes",
-            "type": "shoutbox"
-        }
-        
-        try:
-            response = self.request_helper.request(
-                method="GET",
-                url=self.endpoints['shoutbox'],
-                params=params,
-                headers=self.base_headers,
-                timeout=15
-            )
-            
-            # 解析响应结果
-            return self._parse_response(response, lambda response: " ".join(
-                etree.HTML(response.text).xpath("//tr[1]/td//text()"))
-            )
-        except Exception as e:
-            logger.error(f"消息发送失败: {str(e)}")
-            return f"失败: {str(e)}"
-
-    def get_messages(self, count: int = 10) -> list:
-        """
-        获取最新群聊消息
-        :param count: 获取消息条数
-        :return: 消息列表
-        """
-        try:
-            response = self.request_helper.request(
-                method="GET",
-                url=self.endpoints['shoutbox'],
-                headers=self.base_headers,
-                timeout=10
-            )
-            
-            return self._parse_response(response, lambda response: [
-                "".join(item.xpath(".//text()")) 
-                for item in etree.HTML(response.text).xpath("//tr/td")[:count]
-            ])
-        except Exception as e:
-            logger.error(f"获取消息失败: {str(e)}")
-            return []
-
-    def get_message_list(self, rt_method: callable = None) -> list:
-        """获取站内信列表"""
-        try:
-            response = self.request_helper.request(
-                method="GET",
-                url=self.endpoints['messages'],
-                headers=self.base_headers
-            )
-            
-            # 打印响应内容以调试
-            logger.debug(f"响应内容: {response.text[:500]}")  # 打印前500个字符
-            
-            # 默认解析逻辑
-            if not rt_method:
-                rt_method = lambda response: [
-                    {
-                        "status": "".join(item.xpath("./td[1]/img/@title")),
-                        "topic": "".join(item.xpath("./td[2]//text()")),
-                        "from": "".join(item.xpath("./td[3]/text()")),
-                        "time": "".join(item.xpath("./td[4]//text()")),
-                        "id": "".join(item.xpath("./td[5]/input/@value"))
-                    }
-                    for item in etree.HTML(response.text).xpath("//form/table//tr")
-                ]
-                
-            message_list = rt_method(response)
-            
-            # 打印解析结果以调试
-            logger.debug(f"解析结果: {message_list}")
-            
-            return message_list
-        except Exception as e:
-            logger.error(f"获取站内信失败: {str(e)}")
-            return []
-
-    def set_message_read(self, message_id: str, rt_method: callable = None) -> bool:
-        """标记站内信为已读"""
-        try:
-            data = {
-                "action": "moveordel",
-                "messages[]": message_id,
-                "markread": "设为已读",
-                "box": "1"
-            }
-            
-            response = self.request_helper.request(
-                method="POST",
-                url=self.endpoints['messages'],
-                headers=self.base_headers,
-                data=data
-            )
-            
-            # 默认成功判断
-            if not rt_method:
-                rt_method = lambda response: response.status_code == 200
-                
-            return rt_method(response)
-        except Exception as e:
-            logger.error(f"标记已读失败: {str(e)}")
-            return False
-
-    def _parse_response(self, response, parser: callable):
-        """统一响应解析方法"""
-        try:
-            return parser(response)
-        except Exception as e:
-            logger.error(f"响应解析失败: {str(e)}")
-            return "响应解析失败"
+# 导入辅助类
+from .helpers.request_helper import RequestHelper
+from .helpers.nexusphp_helper import NexusPHPHelper
 
 class GroupChatZone(_PluginBase):
     # 插件名称
@@ -220,7 +27,7 @@ class GroupChatZone(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/GroupChat.png"
     # 插件版本
-    plugin_version = "1.2.6"
+    plugin_version = "1.3.0"  # 版本号更新
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -247,9 +54,9 @@ class GroupChatZone(_PluginBase):
     _notify: bool = False
     _interval_cnt: int = 2
     _chat_sites: list = []
-    _sites_messages: list = []
-    _start_time: int = None
-    _end_time: int = None
+    _sites_messages: str = ""  # 修改为字符串类型
+    _start_time: int = 0  # 修改为默认值0
+    _end_time: int = 0    # 修改为默认值0
     _lock = None
     _running = False
     _preset_sites = {
@@ -259,9 +66,10 @@ class GroupChatZone(_PluginBase):
     def __init__(self):
         super().__init__()
         self.logger = logger 
+        self._lock = threading.Lock()  # 初始化锁
 
     def init_plugin(self, config: dict = None):
-        self._lock = threading.Lock()
+        """初始化插件"""
         self.sites = SitesHelper()
         self.siteoper = SiteOper()
         self.sitechain = SiteChain()
@@ -271,14 +79,13 @@ class GroupChatZone(_PluginBase):
 
         # 配置
         if config:
-            self._enabled = config.get("enabled")
-            self._cron = config.get("cron")
-            self._onlyonce = config.get("onlyonce")
-            self._notify = config.get("notify")
+            self._enabled = config.get("enabled", False)  # 提供默认值
+            self._cron = config.get("cron", "")
+            self._onlyonce = config.get("onlyonce", False)
+            self._notify = config.get("notify", False)
             self._interval_cnt = int(config.get("interval_cnt", 2))
             self._chat_sites = config.get("chat_sites", [])
             self._sites_messages = config.get("sites_messages", "")
-
 
             # 过滤掉已删除的站点
             valid_site_ids = [str(site.get("id")) for site in self.get_all_sites()]
@@ -292,15 +99,17 @@ class GroupChatZone(_PluginBase):
 
         # 加载模块
         if self._enabled or self._onlyonce:
-
             # 立即运行一次
             if self._onlyonce:
                 # 定时服务
                 self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                 logger.info("站点喊话服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.send_site_messages, trigger='date',
-                                        run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                        name="站点喊话服务")
+                self._scheduler.add_job(
+                    func=self.send_site_messages, 
+                    trigger='date',
+                    run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
+                    name="站点喊话服务"
+                )
 
                 # 关闭一次性开关
                 self._onlyonce = False
@@ -308,15 +117,16 @@ class GroupChatZone(_PluginBase):
                 self.__update_config()
 
                 # 启动任务
-                if self._scheduler.get_jobs():
+                if self._scheduler and self._scheduler.get_jobs():
                     self._scheduler.print_jobs()
                     self._scheduler.start()
 
     def get_state(self) -> bool:
+        """获取插件状态"""
         return self._enabled
 
     def __update_config(self):
-        # 保存配置
+        """保存配置"""
         self.update_config(
             {
                 "enabled": self._enabled,
@@ -334,7 +144,7 @@ class GroupChatZone(_PluginBase):
         custom_sites = []
         custom_sites_config = self.get_config("CustomSites")
         if custom_sites_config and custom_sites_config.get("enabled"):
-            custom_sites = custom_sites_config.get("sites")
+            custom_sites = custom_sites_config.get("sites", [])
         return custom_sites
 
     def get_all_sites(self) -> List[dict]:
@@ -366,7 +176,7 @@ class GroupChatZone(_PluginBase):
         try:
             # 获取已选站点的名称集合
             selected_sites = self.get_selected_sites()
-            valid_site_names = {site.get("name").strip() for site in selected_sites}
+            valid_site_names = {site.get("name", "").strip() for site in selected_sites if site.get("name")}
             
             logger.debug(f"有效站点名称列表: {valid_site_names}")
 
@@ -409,18 +219,19 @@ class GroupChatZone(_PluginBase):
             return result
 
     def mail_shotbox(self):
+        """处理预设站点的消息发送"""
         site_messages = self.parse_site_messages(self._sites_messages)
-        request_helper = _RequestHelper(self)
+        request_helper = RequestHelper(self)
         rsp_text_list = []
         
         for site in self.get_selected_sites():
-            site_name = site.get("name")
+            site_name = site.get("name", "")
             
             if site_name not in self._preset_sites:
                 self.logger.warning(f"站点 {site_name} 非预设站点，已跳过")
                 continue
                 
-            messages = site_messages.get(site_name)
+            messages = site_messages.get(site_name, [])
             
             if not messages:
                 self.logger.warning(f"站点 {site_name} 没有配置消息，跳过发送")
@@ -436,7 +247,7 @@ class GroupChatZone(_PluginBase):
                     
                     # 获取消息列表
                     message_list = nexus_helper.get_message_list()
-                    if message_list:
+                    if message_list and len(message_list) > 1:
                         # 获取响应消息
                         message = message_list[1].get("topic", "")
                         rsp_text_list.append(message)
@@ -455,18 +266,19 @@ class GroupChatZone(_PluginBase):
         return "\n".join(rsp_text_list)
     
     def list_shotbox(self):
+        """处理普通站点的消息发送"""
         site_messages = self.parse_site_messages(self._sites_messages)
-        request_helper = _RequestHelper(self)
+        request_helper = RequestHelper(self)
         rsp_text_list = []
         
         for site in self.get_selected_sites():
-            site_name = site.get("name")
+            site_name = site.get("name", "")
             
             if site_name in self._preset_sites:
                 self.logger.warning(f"站点 {site_name} 属于预设站点，将跳过执行稍后在发送")
                 continue
                 
-            messages = site_messages.get(site_name)
+            messages = site_messages.get(site_name, [])
             
             if not messages:
                 self.logger.warning(f"站点 {site_name} 没有配置消息，已跳过")
@@ -482,7 +294,7 @@ class GroupChatZone(_PluginBase):
                     
                     # 获取消息列表
                     message_list = nexus_helper.get_messages()
-                    if message_list:
+                    if message_list and len(message_list) > 0:
                         # 获取响应消息
                         message = message_list[0]
                         rsp_text_list.append(message)
@@ -495,47 +307,49 @@ class GroupChatZone(_PluginBase):
         return "\n".join(rsp_text_list)
 
     def send_site_messages(self):
-        """
-        发送站点消息
-        """
-        try:
-            # 获取选中的站点信息
-            selected_sites = self.get_selected_sites()
-
-            # 获取预设站点名称集合
-            preset_site_names = set(self._preset_sites.keys())
+        """发送站点消息的主方法"""
+        if self._lock.locked():
+            logger.warning("上一次任务还未完成，跳过本次执行")
+            return
             
-            for site in selected_sites:
-                try:
-                    site_name = site.get("name")
-                    self.logger.info(f"站点 {site_name} 在预设站点列表中")
-                    if site_name in preset_site_names:
-                        self.mail_shotbox()
-                    else:
-                        self.list_shotbox()
+        with self._lock:
+            try:
+                # 获取选中的站点信息
+                selected_sites = self.get_selected_sites()
+                if not selected_sites:
+                    logger.warning("没有选择任何站点，跳过执行")
+                    return
+
+                # 获取预设站点名称集合
+                preset_site_names = set(self._preset_sites.keys())
+                
+                # 处理预设站点
+                preset_sites = [site for site in selected_sites if site.get("name", "") in preset_site_names]
+                if preset_sites:
+                    logger.info(f"开始处理 {len(preset_sites)} 个预设站点")
+                    self.mail_shotbox()
+                
+                # 处理普通站点
+                normal_sites = [site for site in selected_sites if site.get("name", "") not in preset_site_names]
+                if normal_sites:
+                    logger.info(f"开始处理 {len(normal_sites)} 个普通站点")
+                    self.list_shotbox()
                     
-                except Exception as e:
-                    logger.error(f"处理站点 {site.get('name')} 时发生错误: {str(e)}")
-        except Exception as e:
-            logger.error(f"发送站点消息时发生全局错误: {str(e)}")
+            except Exception as e:
+                logger.error(f"发送站点消息时发生全局错误: {str(e)}", exc_info=True)
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
-        pass
+        """获取命令"""
+        return []
 
     def get_api(self) -> List[Dict[str, Any]]:
-        pass
+        """获取API"""
+        return []
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
         注册插件公共服务
-        [{
-            "id": "服务ID",
-            "name": "服务名称",
-            "trigger": "触发器：cron/interval/date/CronTrigger.from_crontab()",
-            "func": self.xxx,
-            "kwargs": {} # 定时器参数
-        }]
         """
         if self._enabled and self._cron:
             try:
@@ -819,13 +633,14 @@ class GroupChatZone(_PluginBase):
         }
 
     def get_page(self) -> List[dict]:
-        pass
+        """获取页面"""
+        return []
 
     def stop_service(self):
         """退出插件"""
         try:
             if self._scheduler:
-                if self._lock.locked():
+                if self._lock and self._lock.locked():
                     logger.info("等待当前任务执行完成...")
                     self._lock.acquire()
                     self._lock.release()
