@@ -30,7 +30,7 @@ class GroupChatZone(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/GroupChat.png"
     # 插件版本
-    plugin_version = "1.2.7"
+    plugin_version = "1.2.8"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -91,12 +91,12 @@ class GroupChatZone(_PluginBase):
             self._sites_messages = str(config.get("sites_messages", ""))
 
             # 过滤掉已删除的站点 - 优化数据库访问
-            # 只获取一次站点列表
-            all_site_ids = self.__get_all_site_ids()
+            # 只获取一次站点列表，不记录日志
+            all_site_ids = self.__get_all_site_ids(log_update=False)
             self._chat_sites = [site_id for site_id in self._chat_sites if site_id in all_site_ids]
 
-            # 保存配置
-            self.__update_config()
+            # 保存配置，但不再主动刷新缓存
+            self.__update_config(refresh_cache=False)
 
         # 加载模块
         if self._enabled or self._onlyonce:
@@ -114,7 +114,7 @@ class GroupChatZone(_PluginBase):
                     # 关闭一次性开关
                     self._onlyonce = False
                     # 保存配置
-                    self.__update_config()
+                    self.__update_config(refresh_cache=False)
 
                     # 启动任务
                     if self._scheduler and self._scheduler.get_jobs():
@@ -177,20 +177,26 @@ class GroupChatZone(_PluginBase):
         return self._site_cache
 
     # 修改获取所有站点ID的方法，使用缓存
-    def __get_all_site_ids(self) -> List[str]:
+    def __get_all_site_ids(self, log_update=True) -> List[str]:
         """
         获取所有站点ID（内置站点 + 自定义站点）
+        :param log_update: 是否记录更新日志
         :return: 站点ID列表
         """
-        site_info = self.__get_site_info()
+        site_info = self.__get_site_info(log_update=log_update)
         return site_info["all_site_ids"]
 
     def get_state(self) -> bool:
         return self._enabled
 
-    def __update_config(self):
-        # 保存配置时更新站点缓存
-        self.__get_site_info(refresh=True, log_update=True)
+    def __update_config(self, refresh_cache=True):
+        """
+        更新配置
+        :param refresh_cache: 是否刷新站点缓存
+        """
+        # 根据参数决定是否刷新缓存
+        if refresh_cache:
+            self.__get_site_info(refresh=True, log_update=True)
         
         # 保存配置
         self.update_config(
@@ -530,8 +536,12 @@ class GroupChatZone(_PluginBase):
             if self._chat_sites:
                 # 确保 _sites_messages 是字符串
                 site_messages = self._sites_messages if isinstance(self._sites_messages, str) else ""
-                # 执行任务时强制刷新缓存并记录日志
-                site_msgs = self.parse_site_messages(site_messages, refresh_cache=True)
+                
+                # 先刷新一次缓存，后续操作都使用缓存，避免多次刷新
+                self.__get_site_info(refresh=True, log_update=True)
+                
+                # 使用已刷新的缓存，不再重复刷新
+                site_msgs = self.parse_site_messages(site_messages, refresh_cache=False)
                 self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
         except Exception as e:
             logger.error(f"发送站点消息时发生异常: {str(e)}")
@@ -561,7 +571,8 @@ class GroupChatZone(_PluginBase):
             # 获取选中的站点名称集合
             selected_site_names = {site_id_to_name[site_id] for site_id in self._chat_sites if site_id in site_id_to_name}
             
-            logger.info(f"获取到的选中站点名称列表: {selected_site_names}")
+            # 降低日志级别，减少不必要的INFO日志
+            logger.debug(f"获取到的选中站点名称列表: {selected_site_names}")
 
             # 按行分割配置
             for line in site_messages.strip().splitlines():
@@ -575,20 +586,23 @@ class GroupChatZone(_PluginBase):
                         else:
                             logger.warn(f"站点 {site_name} 没有有效的消息内容")
                     else:
-                        logger.warn(f"站点 {site_name} 不在选中列表中")
+                        # 降低日志级别，减少不必要的警告
+                        logger.debug(f"站点 {site_name} 不在选中列表中")
                 else:
                     logger.warn(f"配置行格式错误，缺少分隔符: {line}")
         except Exception as e:
             logger.error(f"解析站点消息时出现异常: {str(e)}")
-        logger.info(f"站点消息解析完成，解析结果: {result}")
+        
+        # 降低日志级别，减少不必要的INFO日志
+        logger.debug(f"站点消息解析完成，解析结果: {result}")
         return result
 
     def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]]):
         """
         发送消息逻辑
         """
-        # 使用缓存获取站点信息
-        site_info = self.__get_site_info()
+        # 使用缓存获取站点信息，不刷新缓存
+        site_info = self.__get_site_info(refresh=False, log_update=False)
         site_id_map = site_info["site_id_to_obj"]
         
         # 过滤掉没有选中的站点
@@ -661,7 +675,8 @@ class GroupChatZone(_PluginBase):
         else:
             logger.info("部分消息发送失败！！！")
 
-        self.__update_config()
+        # 任务完成后不需要刷新缓存
+        self.__update_config(refresh_cache=False)
 
     def send_message_to_site(self, site_info: CommentedMap, message: str):
         """
@@ -780,10 +795,10 @@ class GroupChatZone(_PluginBase):
         config = self.get_config()
         if config:
             self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
-            # 保存配置
-            self.__update_config()
-            # 清除站点缓存，强制下次重新获取
-            self._site_cache = {}
+            # 保存配置，并刷新缓存
+            self.__update_config(refresh_cache=True)
+            # 不需要再次清空缓存，因为__update_config已经刷新了
+            # self._site_cache = {}
 
     def __remove_site_id(self, do_sites, site_id):
         if do_sites:
