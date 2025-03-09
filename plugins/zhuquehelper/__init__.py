@@ -597,139 +597,137 @@ class ZhuqueHelper(_PluginBase):
 
     def get_page(self) -> List[dict]:
         """获取页面配置"""
-        try:
-            # 查询历史记录
-            historys = self.get_data('sign_dict')
-            if not historys:
-                return [{
+        # 查询同步详情
+        historys = self.get_data('sign_dict')
+        if not historys:
+            return [
+                {
                     'component': 'div',
-                    'content': [{
-                        'component': 'VAlert',
-                        'props': {
-                            'type': 'info',
-                            'text': '暂无历史记录',
-                            'variant': 'tonal',
-                        }
-                    }]
-                }]
-
-            if not isinstance(historys, list):
-                logger.error(f"历史记录格式不正确，类型为: {type(historys)}")
-                return [{
-                    'component': 'div',
-                    'content': [{
-                        'component': 'VAlert',
-                        'props': {
-                            'type': 'error',
-                            'text': '历史记录格式错误，请检查日志',
-                            'variant': 'tonal',
-                        }
-                    }]
-                }]
-
-            # 按照签到时间倒序
-            historys = sorted(historys, 
-                            key=lambda x: datetime.strptime(x.get("date", "1970-01-01 00:00:00"), 
-                                                          '%Y-%m-%d %H:%M:%S'), 
-                            reverse=True)
-
-            # 构建表格行
-            table_rows = []
-            for history in historys:
-                table_rows.append({
-                    'component': 'tr',
-                    'content': [
-                        {
-                            'component': 'td',
-                            'text': history.get("date", "")
-                        },
-                        {
-                            'component': 'td',
-                            'text': history.get("username", "")
-                        },
-                        {
-                            'component': 'td',
-                            'text': str(history.get("min_level", ""))
-                        },
-                        {
-                            'component': 'td',
-                            'text': f"{history.get('skill_release_bonus', 0)} 💎"
-                        },
-                        {
-                            'component': 'td',
-                            'text': f"{history.get('bonus', 0)} 💎"
-                        }
-                    ]
-                })
-
-            return [{
-                'component': 'div',
-                'content': [{
-                    'component': 'VCard',
-                    'content': [{
-                        'component': 'VCardTitle',
-                        'props': {
-                            'class': 'text-h6'
-                        },
-                        'text': '执行历史记录'
-                    }, {
-                        'component': 'VCardText',
-                        'content': [{
-                            'component': 'VTable',
-                            'props': {
-                                'hover': True,
-                                'fixed-header': True,
-                                'height': '500'
-                            },
-                            'content': [{
-                                'component': 'thead',
-                                'content': [{
-                                    'component': 'tr',
-                                    'content': [
-                                        {
-                                            'component': 'th',
-                                            'text': '执行时间'
-                                        },
-                                        {
-                                            'component': 'th',
-                                            'text': '用户名'
-                                        },
-                                        {
-                                            'component': 'th',
-                                            'text': '角色最低等级'
-                                        },
-                                        {
-                                            'component': 'th',
-                                            'text': '技能释放获得'
-                                        },
-                                        {
-                                            'component': 'th',
-                                            'text': '灵石余额'
-                                        }
-                                    ]
-                                }]
-                            }, {
-                                'component': 'tbody',
-                                'content': table_rows
-                            }]
-                        }]
-                    }]
-                }]
-            }]
-
-        except Exception as e:
-            logger.error(f"生成历史记录页面时发生错误: {e}")
-            return [{
-                'component': 'div',
-                'content': [{
-                    'component': 'VAlert',
+                    'text': '暂无数据',
                     'props': {
-                        'type': 'error',
-                        'text': '生成页面时发生错误，请检查日志',
-                        'variant': 'tonal',
+                        'class': 'text-center',
                     }
-                }]
-            }]
+                }
+            ]
+
+        if not isinstance(historys, list):
+            logger.error(f"历史记录格式不正确，类型为: {type(historys)}")
+            return [
+                {
+                    'component': 'div',
+                    'text': '数据格式错误，请检查日志以获取更多信息。',
+                    'props': {
+                        'class': 'text-center',
+                    }
+                }
+            ]
+
+        # 按照签到时间倒序
+        historys = sorted(historys, key=lambda x: x.get("date", ""), reverse=True)
+
+        # 签到消息
+        sign_msgs = [
+            {
+                'component': 'tr',
+                'props': {
+                    'class': 'text-sm'
+                },
+                'content': [
+                    {
+                        'component': 'td',
+                        'props': {
+                            'class': 'whitespace-nowrap break-keep text-high-emphasis'
+                        },
+                        'text': history.get("date", "")
+                    },
+                    {
+                        'component': 'td',
+                        'text': history.get("username", "")
+                    },
+                    {
+                        'component': 'td',
+                        'text': history.get("min_level", "")
+                    },
+                    {
+                        'component': 'td',
+                        'text': f"{history.get('skill_release_bonus', 0)} 💎"
+                    },
+                    {
+                        'component': 'td',
+                        'text': f"{history.get('bonus', 0)} 💎"
+                    }
+                ]
+            } for history in historys
+        ]
+
+        # 拼装页面
+        return [
+            {
+                'component': 'VRow',
+                'content': [
+                    {
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                        },
+                        'content': [
+                            {
+                                'component': 'VTable',
+                                'props': {
+                                    'hover': True
+                                },
+                                'content': [
+                                    {
+                                        'component': 'thead',
+                                        'content': [
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '时间'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '用户名'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '当前角色最低等级'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '本次释放获得的灵石'
+                                            },
+                                            {
+                                                'component': 'th',
+                                                'props': {
+                                                    'class': 'text-start ps-4'
+                                                },
+                                                'text': '当前账户灵石余额'
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        'component': 'tbody',
+                                        'content': sign_msgs
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
 
     def stop_service(self) -> None:
         """
