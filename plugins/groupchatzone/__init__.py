@@ -167,13 +167,13 @@ class GroupChatZone(_PluginBase):
         """
         注册命令
         """
-        return []
+        pass
 
     def get_api(self) -> List[Dict[str, Any]]:
         """
         注册API
         """
-        return []
+        pass
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
@@ -533,7 +533,7 @@ class GroupChatZone(_PluginBase):
         """
         注册页面
         """
-        return []
+        pass
 
     def send_site_messages(self) -> None:
         """
