@@ -601,29 +601,31 @@ class ZhuqueHelper(_PluginBase):
             # 查询历史记录
             historys = self.get_data('sign_dict')
             if not historys:
-                return [
-                    {
+                return [{
+                    'component': 'div',
+                    'content': [{
                         'component': 'VAlert',
                         'props': {
                             'type': 'info',
                             'text': '暂无历史记录',
                             'variant': 'tonal',
                         }
-                    }
-                ]
+                    }]
+                }]
 
             if not isinstance(historys, list):
                 logger.error(f"历史记录格式不正确，类型为: {type(historys)}")
-                return [
-                    {
+                return [{
+                    'component': 'div',
+                    'content': [{
                         'component': 'VAlert',
                         'props': {
                             'type': 'error',
                             'text': '历史记录格式错误，请检查日志',
                             'variant': 'tonal',
                         }
-                    }
-                ]
+                    }]
+                }]
 
             # 按照签到时间倒序
             historys = sorted(historys, 
@@ -639,124 +641,95 @@ class ZhuqueHelper(_PluginBase):
                     'content': [
                         {
                             'component': 'td',
-                            'props': {
-                                'class': 'text-start'
-                            },
                             'text': history.get("date", "")
                         },
                         {
                             'component': 'td',
-                            'props': {
-                                'class': 'text-start'
-                            },
                             'text': history.get("username", "")
                         },
                         {
                             'component': 'td',
-                            'props': {
-                                'class': 'text-start'
-                            },
                             'text': str(history.get("min_level", ""))
                         },
                         {
                             'component': 'td',
-                            'props': {
-                                'class': 'text-start'
-                            },
                             'text': f"{history.get('skill_release_bonus', 0)} 💎"
                         },
                         {
                             'component': 'td',
-                            'props': {
-                                'class': 'text-start'
-                            },
                             'text': f"{history.get('bonus', 0)} 💎"
                         }
                     ]
                 })
 
-            return [
-                {
+            return [{
+                'component': 'div',
+                'content': [{
                     'component': 'VCard',
-                    'content': [
-                        {
-                            'component': 'VCardText',
-                            'content': [
-                                {
-                                    'component': 'VTable',
-                                    'props': {
-                                        'hover': True,
-                                        'density': 'comfortable'
-                                    },
+                    'content': [{
+                        'component': 'VCardTitle',
+                        'props': {
+                            'class': 'text-h6'
+                        },
+                        'text': '执行历史记录'
+                    }, {
+                        'component': 'VCardText',
+                        'content': [{
+                            'component': 'VTable',
+                            'props': {
+                                'hover': True,
+                                'fixed-header': True,
+                                'height': '500'
+                            },
+                            'content': [{
+                                'component': 'thead',
+                                'content': [{
+                                    'component': 'tr',
                                     'content': [
                                         {
-                                            'component': 'thead',
-                                            'content': [
-                                                {
-                                                    'component': 'tr',
-                                                    'content': [
-                                                        {
-                                                            'component': 'th',
-                                                            'props': {
-                                                                'class': 'text-start'
-                                                            },
-                                                            'text': '执行时间'
-                                                        },
-                                                        {
-                                                            'component': 'th',
-                                                            'props': {
-                                                                'class': 'text-start'
-                                                            },
-                                                            'text': '用户名'
-                                                        },
-                                                        {
-                                                            'component': 'th',
-                                                            'props': {
-                                                                'class': 'text-start'
-                                                            },
-                                                            'text': '角色最低等级'
-                                                        },
-                                                        {
-                                                            'component': 'th',
-                                                            'props': {
-                                                                'class': 'text-start'
-                                                            },
-                                                            'text': '技能释放获得'
-                                                        },
-                                                        {
-                                                            'component': 'th',
-                                                            'props': {
-                                                                'class': 'text-start'
-                                                            },
-                                                            'text': '灵石余额'
-                                                        }
-                                                    ]
-                                                }
-                                            ]
+                                            'component': 'th',
+                                            'text': '执行时间'
                                         },
                                         {
-                                            'component': 'tbody',
-                                            'content': table_rows
+                                            'component': 'th',
+                                            'text': '用户名'
+                                        },
+                                        {
+                                            'component': 'th',
+                                            'text': '角色最低等级'
+                                        },
+                                        {
+                                            'component': 'th',
+                                            'text': '技能释放获得'
+                                        },
+                                        {
+                                            'component': 'th',
+                                            'text': '灵石余额'
                                         }
                                     ]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
+                                }]
+                            }, {
+                                'component': 'tbody',
+                                'content': table_rows
+                            }]
+                        }]
+                    }]
+                }]
+            }]
+
         except Exception as e:
             logger.error(f"生成历史记录页面时发生错误: {e}")
-            return [
-                {
+            return [{
+                'component': 'div',
+                'content': [{
                     'component': 'VAlert',
                     'props': {
                         'type': 'error',
                         'text': '生成页面时发生错误，请检查日志',
                         'variant': 'tonal',
                     }
-                }
-            ]
+                }]
+            }]
 
     def stop_service(self) -> None:
         """
