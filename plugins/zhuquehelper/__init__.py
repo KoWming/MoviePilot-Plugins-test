@@ -7,6 +7,7 @@ from typing import Any, List, Dict, Tuple, Optional, Union, cast
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+import jwt
 
 from app.core.config import settings
 from app.plugins import _PluginBase
@@ -101,12 +102,25 @@ class ZhuqueHelper(_PluginBase):
             except Exception as e:
                 logger.error(f"朱雀助手服务启动失败: {str(e)}")
 
+    def get_jwt(self, csrf_token: str) -> str:
+        """
+        使用csrfToken作为密钥生成JWT token
+        """
+        payload = {
+            "exp": int(time.time()) + 28 * 24 * 60 * 60,  # 28天过期
+            "iat": int(time.time())
+        }
+        encoded_jwt = jwt.encode(payload, csrf_token, algorithm="HS256")
+        logger.debug(f"ZhuqueHelper get jwt---》{encoded_jwt}")
+        return encoded_jwt
+
     def __signin(self):
         """
         执行请求任务
         """
         try:
-            res = RequestUtils(cookies=self._cookie).get_res(url="https://zhuque.in/index")
+            # 首先获取页面和CSRF Token
+            res = RequestUtils().get_res(url="https://zhuque.in/index")
             if not res or res.status_code != 200:
                 logger.error("请求首页失败！状态码：%s", res.status_code if res else "无响应")
                 return
@@ -115,19 +129,24 @@ class ZhuqueHelper(_PluginBase):
             pattern = r'<meta\s+name="x-csrf-token"\s+content="([^"]+)">'
             csrfToken = re.findall(pattern, res.text)
             if not csrfToken:
-                logger.error("请求csrfToken失败！页面内容：%s", res.text[:500])  # 打印部分页面内容以便调试
+                logger.error("请求csrfToken失败！页面内容：%s", res.text[:500])
                 return
 
             csrfToken = csrfToken[0]
-            logger.info(f"获取成功：{csrfToken}")
+            logger.info(f"获取CSRF Token成功：{csrfToken}")
 
+            # 使用csrfToken生成JWT
+            jwt_token = self.get_jwt(csrfToken)
+
+            # 设置请求头
             headers = {
-                "cookie": self._cookie,
-                "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-                "x-csrf-token": csrfToken,
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+                "x-csrf-token": jwt_token
             }
 
             try:
+                # 获取用户信息
                 res = RequestUtils(headers=headers).get_res(url="https://zhuque.in/api/user/getMainInfo")
                 if not res or res.status_code != 200:
                     logger.error("请求用户信息失败！状态码：%s，响应内容：%s", res.status_code if res else "无响应", res.text if res else "")
@@ -140,7 +159,7 @@ class ZhuqueHelper(_PluginBase):
                     logger.error("获取用户名失败！响应内容：%s", res.text)
                     return
 
-                logger.info(f"获取成功：{username}")
+                logger.info(f"获取用户名成功：{username}")
 
                 # 开始执行
                 logger.info("开始获取用户信息...")
