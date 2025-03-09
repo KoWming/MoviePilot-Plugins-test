@@ -168,13 +168,13 @@ class GroupChatZone(_PluginBase):
         """
         注册命令
         """
-        pass
+        return []
 
     def get_api(self) -> List[Dict[str, Any]]:
         """
         注册API
         """
-        pass
+        return []
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
@@ -534,7 +534,7 @@ class GroupChatZone(_PluginBase):
         """
         注册页面
         """
-        pass
+        return []
 
     def send_site_messages(self) -> None:
         """
@@ -881,106 +881,143 @@ class GroupChatZone(_PluginBase):
         """
         chat_messages = []
         try:
-            # 首先尝试使用正则表达式提取聊天记录
-            chat_pattern = r'\[\s*([^]]+)\s*\]\s*([^:]+):(.*?)(?=\[\s*[^]]+\s*\]|$)'
-            matches = re.findall(chat_pattern, html_content, re.DOTALL)
+            # 针对特定站点格式的正则表达式
+            # 匹配格式: <span class='date'>[< 1分钟前]</span> <a href="...">username</a> message
+            specific_pattern = r'<span\s+class=[\'"]date[\'"]>\[([^]]+)\]</span>.*?<a[^>]*>([^<]+)</a></span>\s*([^<\n]+)'
+            specific_matches = re.findall(specific_pattern, html_content, re.DOTALL)
             
-            for match in matches:
-                time_str = match[0].strip()
-                username = match[1].strip()
-                message = match[2].strip()
+            if specific_matches:
+                for match in specific_matches:
+                    time_str = match[0].strip()
+                    username = match[1].strip()
+                    message = match[2].strip()
+                    
+                    chat_messages.append({
+                        "time": time_str,
+                        "username": username,
+                        "message": message
+                    })
                 
-                chat_messages.append({
-                    "time": time_str,
-                    "username": username,
-                    "message": message
-                })
+                logger.debug(f"使用特定格式正则表达式找到 {len(chat_messages)} 条聊天记录")
             
-            # 如果正则表达式没有找到匹配，尝试使用BeautifulSoup解析HTML
+            # 如果特定格式没有匹配，尝试更通用的格式
+            if not chat_messages:
+                # 尝试匹配 <span class='date'>[时间]</span> 后面的内容
+                date_spans = re.findall(r'<span\s+class=[\'"]date[\'"]>\[([^]]+)\]</span>(.*?)(?=<span\s+class=[\'"]date[\'"]>|\Z)', html_content, re.DOTALL)
+                
+                for date_span in date_spans:
+                    time_str = date_span[0].strip()
+                    content = date_span[1].strip()
+                    
+                    # 尝试从内容中提取用户名和消息
+                    user_match = re.search(r'<a[^>]*>([^<]+)</a>', content)
+                    username = user_match.group(1).strip() if user_match else "未知用户"
+                    
+                    # 移除HTML标签获取消息内容
+                    message = re.sub(r'<[^>]*>', ' ', content).strip()
+                    
+                    chat_messages.append({
+                        "time": time_str,
+                        "username": username,
+                        "message": message
+                    })
+                
+                if date_spans:
+                    logger.debug(f"使用日期span匹配找到 {len(chat_messages)} 条聊天记录")
+            
+            # 如果仍然没有找到，尝试使用更简单的正则表达式
+            if not chat_messages:
+                # 尝试匹配 [时间] 用户名: 消息 格式
+                simple_pattern = r'\[\s*([^]]+)\s*\]\s*([^:]+):(.*?)(?=\[\s*[^]]+\s*\]|$)'
+                simple_matches = re.findall(simple_pattern, html_content, re.DOTALL)
+                
+                for match in simple_matches:
+                    time_str = match[0].strip()
+                    username = match[1].strip()
+                    message = match[2].strip()
+                    
+                    # 清理用户名和消息中的HTML标签
+                    username = re.sub(r'<[^>]*>', '', username).strip()
+                    message = re.sub(r'<[^>]*>', '', message).strip()
+                    
+                    if time_str and username:  # 至少有时间和用户名
+                        chat_messages.append({
+                            "time": time_str,
+                            "username": username,
+                            "message": message
+                        })
+                
+                if simple_matches:
+                    logger.debug(f"使用简单正则表达式找到 {len(chat_messages)} 条聊天记录")
+            
+            # 如果BeautifulSoup可用，尝试使用它进行更精确的解析
             if not chat_messages:
                 try:
                     from bs4 import BeautifulSoup
                     soup = BeautifulSoup(html_content, 'html.parser')
                     
-                    # 尝试查找聊天区域
-                    # 这里的选择器需要根据实际站点HTML结构调整
-                    chat_containers = soup.select('div.shoutbox, div.chat-container, table.shoutbox')
+                    # 查找所有包含聊天记录的行
+                    chat_rows = soup.select('tr td.shoutrow')
                     
-                    if chat_containers:
-                        for container in chat_containers:
-                            # 查找聊天消息元素
-                            chat_items = container.select('tr, div.chat-item, div.shout-item')
-                            
-                            for item in chat_items:
-                                # 提取时间、用户名和消息
-                                # 这里的选择器需要根据实际站点HTML结构调整
-                                time_elem = item.select_one('span.time, td.time, div.time')
-                                user_elem = item.select_one('span.user, td.user, div.user, a.user')
-                                msg_elem = item.select_one('span.message, td.message, div.message')
-                                
-                                time_str = time_elem.text.strip() if time_elem else ""
-                                username = user_elem.text.strip() if user_elem else ""
-                                message = msg_elem.text.strip() if msg_elem else ""
-                                
-                                # 如果没有找到特定元素，尝试从整个item中提取文本
-                                if not (time_str and username and message):
-                                    text = item.text.strip()
-                                    # 尝试解析文本格式，例如 "[时间] 用户名: 消息"
-                                    match = re.search(r'\[(.*?)\](.*?):(.*)', text)
-                                    if match:
-                                        time_str = match.group(1).strip()
-                                        username = match.group(2).strip()
-                                        message = match.group(3).strip()
-                                
-                                if time_str or username or message:
-                                    chat_messages.append({
-                                        "time": time_str,
-                                        "username": username,
-                                        "message": message
-                                    })
-                except ImportError:
-                    logger.warning("BeautifulSoup库未安装，无法使用高级HTML解析")
-                except Exception as e:
-                    logger.error(f"使用BeautifulSoup解析HTML时出错: {str(e)}")
-            
-            # 如果仍然没有找到聊天记录，尝试查找可能的聊天文本
-            if not chat_messages:
-                # 查找可能包含聊天记录的文本块
-                text_blocks = re.findall(r'<div[^>]*>(.*?)</div>', html_content, re.DOTALL)
-                for block in text_blocks:
-                    # 移除HTML标签
-                    clean_text = re.sub(r'<[^>]*>', ' ', block)
-                    # 查找可能的聊天记录格式
-                    chat_matches = re.findall(r'\[(.*?)\](.*?):(.*?)(?=\[|$)', clean_text)
-                    for match in chat_matches:
-                        time_str = match[0].strip()
-                        username = match[1].strip()
-                        message = match[2].strip()
+                    for row in chat_rows:
+                        # 提取时间
+                        date_span = row.select_one('span.date')
+                        time_str = date_span.text.strip('[]') if date_span else ""
                         
-                        if time_str and username:  # 至少有时间和用户名
+                        # 提取用户名
+                        user_link = row.select_one('a[href*="userdetails.php"]')
+                        username = user_link.text.strip() if user_link else ""
+                        
+                        # 提取消息 - 移除时间和用户名部分后的内容
+                        if date_span:
+                            date_span.decompose()  # 移除时间span
+                        if user_link:
+                            user_link.decompose()  # 移除用户链接
+                        
+                        # 获取剩余文本作为消息
+                        message = row.text.strip()
+                        
+                        if time_str and username:
                             chat_messages.append({
                                 "time": time_str,
                                 "username": username,
                                 "message": message
                             })
+                    
+                    if chat_rows:
+                        logger.debug(f"使用BeautifulSoup找到 {len(chat_messages)} 条聊天记录")
+                        
+                except ImportError:
+                    logger.warning("BeautifulSoup库未安装，无法使用高级HTML解析")
+                except Exception as e:
+                    logger.error(f"使用BeautifulSoup解析HTML时出错: {str(e)}")
             
-            # 去重并按时间排序
+            # 去重并清理消息
             if chat_messages:
                 # 创建一个集合用于去重
                 seen = set()
                 unique_messages = []
                 
                 for msg in chat_messages:
+                    # 进一步清理消息
+                    msg["time"] = re.sub(r'CDATA\[.*', '', msg["time"]).strip()
+                    msg["username"] = re.sub(r'CDATA\[.*|]>.*', '', msg["username"]).strip()
+                    msg["message"] = re.sub(r'CDATA\[.*|]>.*', '', msg["message"]).strip()
+                    
+                    # 如果消息内容为空或只包含JavaScript/HTML，则跳过
+                    if not msg["message"] or msg["message"].startswith("function") or msg["message"].startswith("var"):
+                        continue
+                        
                     # 创建一个唯一标识
                     msg_id = f"{msg['time']}|{msg['username']}|{msg['message']}"
-                    if msg_id not in seen:
+                    if msg_id not in seen and msg["time"] and msg["username"]:
                         seen.add(msg_id)
                         unique_messages.append(msg)
                 
                 chat_messages = unique_messages
                 
                 # 记录解析结果
-                logger.debug(f"成功解析到 {len(chat_messages)} 条聊天记录")
+                logger.debug(f"成功解析到 {len(chat_messages)} 条有效聊天记录")
                 if chat_messages:
                     logger.debug(f"示例记录: {chat_messages[0]}")
             else:
@@ -1061,3 +1098,73 @@ class GroupChatZone(_PluginBase):
         
         if original_count != filtered_count:
             logger.info(f"已从配置中移除 {original_count - filtered_count} 个不存在的站点")
+
+    def get_site_chat(self, site_id: str) -> Tuple[bool, str, List[Dict]]:
+        """
+        获取站点聊天记录（不发送消息）
+        :param site_id: 站点ID
+        :return: (成功状态, 消息, 聊天记录列表)
+        """
+        # 查询所有站点
+        all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
+        
+        # 查找指定站点
+        site_info = None
+        for site in all_sites:
+            if str(site.get("id")) == str(site_id):
+                site_info = site
+                break
+                
+        if not site_info:
+            return False, f"站点ID {site_id} 不存在", []
+
+        # 站点信息
+        site_name = site_info.get("name", "").strip()
+        site_url = site_info.get("url", "").strip()
+        site_cookie = site_info.get("cookie", "").strip()
+        ua = site_info.get("ua", "").strip()
+        proxies = settings.PROXY if site_info.get("proxy") else None
+
+        if not all([site_name, site_url, site_cookie, ua]):
+            return False, f"站点 {site_name} 缺少必要信息", []
+
+        # 构建请求URL - 只访问聊天页面而不发送消息
+        chat_url = urljoin(site_url, "/shoutbox.php")
+        headers = {
+            'User-Agent': ua,
+            'Cookie': site_cookie,
+            'Referer': site_url
+        }
+
+        # 配置重试策略
+        retries = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[403, 404, 500, 502, 503, 504],
+            allowed_methods=["GET"],
+            raise_on_status=False
+        )
+        adapter = HTTPAdapter(max_retries=retries)
+
+        # 使用Session对象
+        with requests.Session() as session:
+            session.headers.update(headers)
+            if proxies:
+                session.proxies = proxies
+            session.mount('https://', adapter)
+            
+            try:
+                response = session.get(chat_url, timeout=(3.05, 10))
+                response.raise_for_status()
+                
+                # 解析返回的聊天记录
+                chat_messages = self._parse_chat_response(response.text)
+                
+                logger.info(f"成功获取站点 {site_name} 的聊天记录，共 {len(chat_messages)} 条")
+                return True, f"成功获取聊天记录", chat_messages
+                
+            except Exception as e:
+                logger.error(f"获取站点 {site_name} 聊天记录失败: {str(e)}")
+                import traceback
+                logger.debug(f"异常详情: {traceback.format_exc()}")
+                return False, f"获取聊天记录失败: {str(e)}", []
