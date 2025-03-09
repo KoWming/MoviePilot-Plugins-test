@@ -625,42 +625,6 @@ class ZhuqueHelper(_PluginBase):
         # 按照签到时间倒序
         historys = sorted(historys, key=lambda x: x.get("date", ""), reverse=True)
 
-        # 签到消息
-        sign_msgs = [
-            {
-                'component': 'tr',
-                'props': {
-                    'class': 'text-sm'
-                },
-                'content': [
-                    {
-                        'component': 'td',
-                        'props': {
-                            'class': 'whitespace-nowrap break-keep text-high-emphasis'
-                        },
-                        'text': history.get("date", "")
-                    },
-                    {
-                        'component': 'td',
-                        'text': history.get("username", "")
-                    },
-                    {
-                        'component': 'td',
-                        'text': history.get("min_level", "")
-                    },
-                    {
-                        'component': 'td',
-                        'text': f"{history.get('skill_release_bonus', 0)} 💎"
-                    },
-                    {
-                        'component': 'td',
-                        'text': f"{history.get('bonus', 0)} 💎"
-                    }
-                ]
-            } for history in historys
-        ]
-
-        # 拼装页面
         return [
             {
                 'component': 'VRow',
@@ -681,45 +645,82 @@ class ZhuqueHelper(_PluginBase):
                                         'component': 'thead',
                                         'content': [
                                             {
-                                                'component': 'th',
-                                                'props': {
-                                                    'class': 'text-start ps-4'
-                                                },
-                                                'text': '时间'
-                                            },
-                                            {
-                                                'component': 'th',
-                                                'props': {
-                                                    'class': 'text-start ps-4'
-                                                },
-                                                'text': '用户名'
-                                            },
-                                            {
-                                                'component': 'th',
-                                                'props': {
-                                                    'class': 'text-start ps-4'
-                                                },
-                                                'text': '当前角色最低等级'
-                                            },
-                                            {
-                                                'component': 'th',
-                                                'props': {
-                                                    'class': 'text-start ps-4'
-                                                },
-                                                'text': '本次释放获得的灵石'
-                                            },
-                                            {
-                                                'component': 'th',
-                                                'props': {
-                                                    'class': 'text-start ps-4'
-                                                },
-                                                'text': '当前账户灵石余额'
+                                                'component': 'tr',
+                                                'content': [
+                                                    {
+                                                        'component': 'th',
+                                                        'props': {
+                                                            'class': 'text-start ps-4'
+                                                        },
+                                                        'text': '时间'
+                                                    },
+                                                    {
+                                                        'component': 'th',
+                                                        'props': {
+                                                            'class': 'text-start ps-4'
+                                                        },
+                                                        'text': '用户名'
+                                                    },
+                                                    {
+                                                        'component': 'th',
+                                                        'props': {
+                                                            'class': 'text-start ps-4'
+                                                        },
+                                                        'text': '当前角色最低等级'
+                                                    },
+                                                    {
+                                                        'component': 'th',
+                                                        'props': {
+                                                            'class': 'text-start ps-4'
+                                                        },
+                                                        'text': '本次释放获得的灵石'
+                                                    },
+                                                    {
+                                                        'component': 'th',
+                                                        'props': {
+                                                            'class': 'text-start ps-4'
+                                                        },
+                                                        'text': '当前账户灵石余额'
+                                                    }
+                                                ]
                                             }
                                         ]
                                     },
                                     {
                                         'component': 'tbody',
-                                        'content': sign_msgs
+                                        'content': [
+                                            {
+                                                'component': 'tr',
+                                                'props': {
+                                                    'class': 'text-sm'
+                                                },
+                                                'content': [
+                                                    {
+                                                        'component': 'td',
+                                                        'props': {
+                                                            'class': 'whitespace-nowrap break-keep text-high-emphasis'
+                                                        },
+                                                        'text': history.get("date", "")
+                                                    },
+                                                    {
+                                                        'component': 'td',
+                                                        'text': history.get("username", "")
+                                                    },
+                                                    {
+                                                        'component': 'td',
+                                                        'text': history.get("min_level", "")
+                                                    },
+                                                    {
+                                                        'component': 'td',
+                                                        'text': f"{history.get('skill_release_bonus', 0)} 💎"
+                                                    },
+                                                    {
+                                                        'component': 'td',
+                                                        'text': f"{history.get('bonus', 0)} 💎"
+                                                    }
+                                                ]
+                                            } for history in historys
+                                        ]
                                     }
                                 ]
                             }
