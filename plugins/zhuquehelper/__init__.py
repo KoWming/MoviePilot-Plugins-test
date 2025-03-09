@@ -101,241 +101,147 @@ class ZhuqueHelper(_PluginBase):
             except Exception as e:
                 logger.error(f"朱雀助手服务启动失败: {str(e)}")
 
-    def __signin(self) -> None:
+    def __signin(self):
         """
         执行请求任务
         """
-        if not self._cookie:
-            logger.error("朱雀助手: Cookie未设置，无法执行任务")
-            return
-
-        try:
-            # 获取CSRF令牌
-            csrf_token = self._get_csrf_token()
-            if not csrf_token:
-                return
-
-            # 设置请求头
-            headers = self._create_headers(csrf_token)
-            
-            # 获取用户信息
-            username = self._get_username(headers)
-            if not username:
-                return
-                
-            # 开始执行主要功能
-            logger.info("开始获取用户信息...")
-            bonus, min_level = self.get_user_info(headers)
-            logger.info(f"获取用户信息完成，bonus: {bonus}, min_level: {min_level}")
-
-            # 执行角色升级
-            logger.info("开始一键升级角色...")
-            results = self.train_genshin_character(
-                self._target_level or 79, 
-                self._skill_release or False, 
-                self._level_up or False, 
-                headers
-            )
-            logger.info(f"一键升级完成，结果: {results}")
-
-            # 生成报告
-            if bonus is not None and min_level is not None:
-                logger.info("开始生成报告...")
-                rich_text_report = self.generate_rich_text_report(results, bonus, min_level)
-                logger.info(f"报告生成完成：\n{rich_text_report}")
-            else:
-                logger.error("获取用户信息失败，无法生成报告。")
-                return
-
-            # 保存执行记录
-            self._save_execution_record(username, bonus, min_level, results)
-
-            # 发送通知
-            if self._notify:
-                self.post_message(
-                    mtype=NotificationType.SiteMessage,
-                    title="【朱雀助手任务执行完成】",
-                    text=rich_text_report
-                )
-
-        except Exception as e:
-            logger.error(f"朱雀助手任务执行失败: {str(e)}")
-
-    def _get_csrf_token(self) -> Optional[str]:
-        """获取CSRF令牌"""
         try:
             res = RequestUtils(cookies=self._cookie).get_res(url="https://zhuque.in/index")
             if not res or res.status_code != 200:
                 logger.error("请求首页失败！状态码：%s", res.status_code if res else "无响应")
-                return None
+                return
 
+            # 获取csrfToken
             pattern = r'<meta\s+name="x-csrf-token"\s+content="([^"]+)">'
-            csrf_tokens = re.findall(pattern, res.text)
-            if not csrf_tokens:
-                logger.error("请求csrfToken失败！页面内容：%s", res.text[:500])
-                return None
+            csrfToken = re.findall(pattern, res.text)
+            if not csrfToken:
+                logger.error("请求csrfToken失败！页面内容：%s", res.text[:500])  # 打印部分页面内容以便调试
+                return
 
-            csrf_token = csrf_tokens[0]
-            logger.info(f"获取CSRF令牌成功：{csrf_token}")
-            return csrf_token
-        except requests.exceptions.RequestException as e:
-            logger.error(f"获取CSRF令牌时发生异常: {e}")
-            return None
+            csrfToken = csrfToken[0]
+            logger.info(f"获取成功：{csrfToken}")
 
-    def _create_headers(self, csrf_token: str) -> Dict[str, str]:
-        """创建请求头"""
-        return {
-            "cookie": self._cookie or "",
-            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-            "x-csrf-token": csrf_token,
-        }
-
-    def _get_username(self, headers: Dict[str, str]) -> Optional[str]:
-        """获取用户名"""
-        try:
-            res = RequestUtils(headers=headers).get_res(url="https://zhuque.in/api/user/getMainInfo")
-            if not res or res.status_code != 200:
-                logger.error("请求用户信息失败！状态码：%s，响应内容：%s", 
-                             res.status_code if res else "无响应", 
-                             res.text if res else "")
-                return None
-
-            data = res.json().get('data', {})
-            username = data.get('username')
-            if not username:
-                logger.error("获取用户名失败！响应内容：%s", res.text)
-                return None
-
-            logger.info(f"获取用户名成功：{username}")
-            return username
-        except requests.exceptions.RequestException as e:
-            logger.error(f"获取用户名时发生异常: {e}")
-            return None
-        except ValueError as e:
-            logger.error(f"解析用户信息JSON时发生异常: {e}")
-            return None
-
-    def _save_execution_record(self, username: str, bonus: int, min_level: int, results: Dict) -> None:
-        """保存执行记录"""
-        try:
-            sign_dict = {
-                "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
-                "username": username,
-                "bonus": bonus,
-                "min_level": min_level,
-                "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0),
+            headers = {
+                "cookie": self._cookie,
+                "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+                "x-csrf-token": csrfToken,
             }
 
-            sign_data = self.get_data('sign_dict') or []
-            if not isinstance(sign_data, list):
-                sign_data = []
-            sign_data.append(sign_dict)
+            try:
+                res = RequestUtils(headers=headers).get_res(url="https://zhuque.in/api/user/getMainInfo")
+                if not res or res.status_code != 200:
+                    logger.error("请求用户信息失败！状态码：%s，响应内容：%s", res.status_code if res else "无响应", res.text if res else "")
+                    return
 
-            # 清理过期记录
-            if self._history_days:
+                # 获取username
+                data = res.json().get('data', {})
+                username = data.get('username', res.text)
+                if not username:
+                    logger.error("获取用户名失败！响应内容：%s", res.text)
+                    return
+
+                logger.info(f"获取成功：{username}")
+
+                # 开始执行
+                logger.info("开始获取用户信息...")
+                bonus, min_level = self.get_user_info(headers)
+                logger.info(f"获取用户信息完成，bonus: {bonus}, min_level: {min_level}")
+
+                logger.info("开始一键升级角色...")
+                results = self.train_genshin_character(self._target_level, self._skill_release, self._level_up, headers)
+                logger.info(f"一键升级完成，结果: {results}")
+
+                if bonus is not None and min_level is not None:
+                    logger.info("开始生成报告...")
+                    rich_text_report = self.generate_rich_text_report(results, bonus, min_level)
+                    logger.info(f"报告生成完成：\n{rich_text_report}")
+                else:
+                    logger.error("获取用户信息失败，无法生成报告。")
+
+                sign_dict = {
+                    "date": datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
+                    "username": username,
+                    "bonus": bonus,
+                    "min_level": min_level,
+                    "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0),
+                }
+
+                # 读取历史记录
+                history = self.get_data('sign_dict') or []
+                history.append(sign_dict)
+                self.save_data(key="sign_dict", value=history)
+
+                # 发送通知
+                if self._notify:
+                    self.post_message(
+                        mtype=NotificationType.SiteMessage,
+                        title="【任务执行完成】",
+                        text=f"{rich_text_report}")
+
                 thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
-                sign_data = [record for record in sign_data if
-                          datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
+                history = [record for record in history if
+                        datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
 
-            self.save_data('sign_dict', sign_data)
-        except Exception as e:
-            logger.error(f"保存执行记录时发生异常: {e}")
+            except requests.exceptions.RequestException as e:
+                logger.error(f"请求用户信息时发生异常: {e}，响应内容：{res.text if 'res' in locals() else '无响应'}")
 
-    def get_user_info(self, headers: Dict[str, str]) -> Tuple[Optional[int], Optional[int]]:
+        except requests.exceptions.RequestException as e:
+            logger.error(f"请求首页时发生异常: {e}")
+
+    def get_user_info(self, headers):
         """
         获取用户信息（灵石余额和角色最低等级）
         """
         url = "https://zhuque.in/api/gaming/listGenshinCharacter"
         try:
             response = RequestUtils(headers=headers).get_res(url=url)
-            if not response or response.status_code != 200:
-                logger.error(f"获取用户信息失败，状态码: {response.status_code if response else '无响应'}")
-                return None, None
-                
-            data = response.json().get('data', {})
-            if not data:
-                logger.error("获取用户信息失败，返回数据为空")
-                return None, None
-                
-            bonus = data.get('bonus')
-            characters = data.get('characters', [])
-            
-            if not characters:
-                logger.error("获取角色信息失败，角色列表为空")
-                return bonus, None
-                
-            min_level = min(char.get('info', {}).get('level', 0) for char in characters)
+            response.raise_for_status()
+            data = response.json()['data']
+            bonus = data['bonus']
+            min_level = min(char['info']['level'] for char in data['characters'])
             return bonus, min_level
         except requests.exceptions.RequestException as e:
-            logger.error(f"获取用户信息失败: {e}")
-            return None, None
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"解析用户信息时发生异常: {e}")
+            logger.error(f"获取用户信息失败: {e}，响应内容：{response.content if 'response' in locals() else '无响应'}")
             return None, None
 
-    def train_genshin_character(self, level: int, skill_release: bool, level_up: bool, 
-                               headers: Dict[str, str]) -> Dict[str, Any]:
-        """
-        训练角色（释放技能和升级）
-        """
-        results: Dict[str, Any] = {}
-        
+    def train_genshin_character(self, level, skill_release, level_up, headers):
+        results = {}
         # 释放技能
         if skill_release:
-            results['skill_release'] = self._release_skill(headers)
-            
+            url = "https://zhuque.in/api/gaming/fireGenshinCharacterMagic"
+            data = {
+                "all": 1,
+                "resetModal": True
+            }
+            try:
+                response = RequestUtils(headers=headers).post_res(url=url, json=data)
+                response.raise_for_status()
+                response_data = response.json()
+                bonus = response_data['data']['bonus']
+                results['skill_release'] = {
+                    'status': '成功',
+                    'bonus': bonus
+                }
+            except requests.exceptions.RequestException as e:
+                results['skill_release'] = {'status': '失败', 'error': '访问错误'}
+
         # 一键升级
         if level_up:
-            results['level_up'] = self._level_up_character(level, headers)
-            
-        return results
-
-    def _release_skill(self, headers: Dict[str, str]) -> Dict[str, Any]:
-        """释放技能"""
-        url = "https://zhuque.in/api/gaming/fireGenshinCharacterMagic"
-        data = {
-            "all": 1,
-            "resetModal": True
-        }
-        try:
-            response = RequestUtils(headers=headers).post_res(url=url, json=data)
-            if not response or response.status_code != 200:
-                return {'status': '失败', 'error': f'状态码: {response.status_code if response else "无响应"}'}
-                
-            response_data = response.json()
-            bonus = response_data.get('data', {}).get('bonus', 0)
-            return {
-                'status': '成功',
-                'bonus': bonus
+            url = "https://zhuque.in/api/gaming/trainGenshinCharacter"
+            data = {
+                "resetModal": False,
+                "level": level,
             }
-        except requests.exceptions.RequestException as e:
-            logger.error(f"释放技能失败: {e}")
-            return {'status': '失败', 'error': '网络错误'}
-        except (ValueError, KeyError) as e:
-            logger.error(f"解析释放技能响应时发生异常: {e}")
-            return {'status': '失败', 'error': '解析响应失败'}
-
-    def _level_up_character(self, level: int, headers: Dict[str, str]) -> Dict[str, Any]:
-        """升级角色"""
-        url = "https://zhuque.in/api/gaming/trainGenshinCharacter"
-        data = {
-            "resetModal": False,
-            "level": level,
-        }
-        try:
-            response = RequestUtils(headers=headers).post_res(url=url, json=data)
-            if not response:
-                return {'status': '失败', 'error': '无响应'}
-                
-            if response.status_code == 200:
-                return {'status': '成功'}
-            elif response.status_code == 400:
-                return {'status': '成功', 'error': '灵石不足'}
-            else:
-                return {'status': '失败', 'error': f'状态码: {response.status_code}'}
-        except requests.exceptions.RequestException as e:
-            logger.error(f"升级角色失败: {e}")
-            return {'status': '失败', 'error': '网络错误'}
+            try:
+                response = RequestUtils(headers=headers).post_res(url=url, json=data)
+                response.raise_for_status()
+                results['level_up'] = {'status': '成功'}
+            except requests.exceptions.RequestException as e:
+                if response.status_code == 400:
+                    results['level_up'] = {'status': '成功', 'error': '灵石不足'}
+                else:
+                    results['level_up'] = {'status': '失败', 'error': '网络错误'}
+        return results
 
     def generate_rich_text_report(self, results: Dict[str, Any], bonus: int, min_level: int) -> str:
         """生成报告"""
@@ -593,10 +499,10 @@ class ZhuqueHelper(_PluginBase):
         }
 
     def get_page(self) -> List[dict]:
-        """获取页面配置"""
         # 查询同步详情
-        sign_data = self.get_data('sign_dict') or []
-        if not sign_data:
+        historys = self.get_data('sign_dict')
+        if not historys:
+            logger.error("历史记录为空，无法显示任何信息。")
             return [
                 {
                     'component': 'div',
@@ -607,8 +513,8 @@ class ZhuqueHelper(_PluginBase):
                 }
             ]
 
-        if not isinstance(sign_data, list):
-            logger.error(f"历史记录格式不正确，类型为: {type(sign_data)}")
+        if not isinstance(historys, list):
+            logger.error(f"历史记录格式不正确，类型为: {type(historys)}")
             return [
                 {
                     'component': 'div',
@@ -620,12 +526,11 @@ class ZhuqueHelper(_PluginBase):
             ]
 
         # 按照签到时间倒序
-        sign_data = sorted(sign_data, key=lambda x: x.get("date", ""), reverse=True)
+        historys = sorted(historys, key=lambda x: x.get("date") or 0, reverse=True)
 
         # 签到消息
-        sign_msgs = []
-        for sign in sign_data:
-            sign_msgs.append({
+        sign_msgs = [
+            {
                 'component': 'tr',
                 'props': {
                     'class': 'text-sm'
@@ -636,27 +541,29 @@ class ZhuqueHelper(_PluginBase):
                         'props': {
                             'class': 'whitespace-nowrap break-keep text-high-emphasis'
                         },
-                        'text': sign.get("date", "")
+                        'text': history.get("date")
                     },
                     {
                         'component': 'td',
-                        'text': sign.get("username", "")
+                        'text': history.get("username")
                     },
                     {
                         'component': 'td',
-                        'text': sign.get("min_level", "")
+                        'text': history.get("min_level")
                     },
                     {
                         'component': 'td',
-                        'text': f"{sign.get('skill_release_bonus', 0)} 💎"
+                        'text': f"{history.get('skill_release_bonus', 0)} 💎"
                     },
                     {
                         'component': 'td',
-                        'text': f"{sign.get('bonus', 0)} 💎"
+                        'text': f"{history.get('bonus', 0)} 💎"
                     }
                 ]
-            })
+            } for history in historys
+        ]
 
+        # 拼装页面
         return [
             {
                 'component': 'VRow',
