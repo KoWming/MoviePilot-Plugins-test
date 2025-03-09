@@ -2,6 +2,7 @@ import pytz
 import time
 import requests
 import threading
+import re
 from datetime import datetime, timedelta
 from typing import Any, List, Dict, Tuple, Optional
 from urllib.parse import urljoin
@@ -689,13 +690,23 @@ class GroupChatZone(_PluginBase):
             success_count = 0
             failure_count = 0
             failed_messages = []
+            chat_records = []  # 存储聊天记录
 
             for i, message in enumerate(messages):
                 try:
-                    self.send_message_to_site(site, message)
-                    success_count += 1
-                    total_success += 1
-                    logger.debug(f"站点 {site_name} 消息 {i+1}/{len(messages)} 发送成功")
+                    success, msg, chat_msgs = self.send_message_to_site(site, message)
+                    if success:
+                        success_count += 1
+                        total_success += 1
+                        logger.debug(f"站点 {site_name} 消息 {i+1}/{len(messages)} 发送成功")
+                        
+                        # 保存聊天记录
+                        if chat_msgs:
+                            chat_records.extend(chat_msgs)
+                            logger.debug(f"获取到 {len(chat_msgs)} 条聊天记录")
+                    else:
+                        raise MessageSendError(msg)
+                        
                 except MessageSendError as e:
                     logger.error(f"向站点 {site_name} 发送消息失败: {str(e)}")
                     failure_count += 1
@@ -718,10 +729,11 @@ class GroupChatZone(_PluginBase):
             site_results[site_name] = {
                 "success_count": success_count,
                 "failure_count": failure_count,
-                "failed_messages": failed_messages
+                "failed_messages": failed_messages,
+                "chat_records": chat_records  # 添加聊天记录
             }
             
-            logger.info(f"站点 {site_name} 处理完成: 成功 {success_count} 条, 失败 {failure_count} 条")
+            logger.info(f"站点 {site_name} 处理完成: 成功 {success_count} 条, 失败 {failure_count} 条, 获取聊天记录 {len(chat_records)} 条")
 
         # 发送通知
         if self._notify:
@@ -752,9 +764,23 @@ class GroupChatZone(_PluginBase):
             success_count = result["success_count"]
             failure_count = result["failure_count"]
             failed_messages = result["failed_messages"]
+            chat_records = result.get("chat_records", [])
+            
             notification_text += f"【{site_name}】成功发送{success_count}条信息，失败{failure_count}条\n"
+            
             if failed_messages:
                 notification_text += f"失败的消息: {', '.join(failed_messages)}\n"
+            
+            # 添加聊天记录到通知
+            if chat_records:
+                notification_text += f"\n最近聊天记录 ({len(chat_records)}条):\n"
+                # 最多显示5条最新的聊天记录
+                for record in chat_records[-5:]:
+                    time_str = record.get("time", "")
+                    username = record.get("username", "")
+                    message = record.get("message", "")
+                    notification_text += f"[{time_str}] {username}: {message}\n"
+                notification_text += "\n"
         
         notification_text += f"\n{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
 
@@ -764,13 +790,13 @@ class GroupChatZone(_PluginBase):
             text=notification_text
         )
 
-    def send_message_to_site(self, site_info: CommentedMap, message: str) -> None:
+    def send_message_to_site(self, site_info: CommentedMap, message: str) -> Tuple[bool, str, List[Dict]]:
         """
         向站点发送消息
         :param site_info: 站点信息
         :param message: 要发送的消息
         :raises MessageSendError: 当消息发送失败时
-        :return: None
+        :return: (成功状态, 消息, 聊天记录列表)
         """
         if not site_info:
             raise MessageSendError("无效的站点信息！")
@@ -784,9 +810,6 @@ class GroupChatZone(_PluginBase):
 
         if not all([site_name, site_url, site_cookie, ua]):
             raise MessageSendError(f"站点 {site_name} 缺少必要信息，无法发送消息！")
-
-        # 移除对消息模板变量的处理
-        # message = self._process_message_template(message)
 
         send_url = urljoin(site_url, "/shoutbox.php")
         headers = {
@@ -824,8 +847,12 @@ class GroupChatZone(_PluginBase):
                 try:
                     response = session.get(send_url, params=params, timeout=(3.05, 10))
                     response.raise_for_status()  # 自动处理 4xx/5xx 状态码
+                    
+                    # 解析返回的聊天记录
+                    chat_messages = self._parse_chat_response(response.text)
+                    
                     logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
-                    return  # 成功发送后直接返回
+                    return True, f"消息发送成功", chat_messages  # 成功发送后返回聊天记录
                 except requests.exceptions.HTTPError as http_err:
                     logger.error(f"向 {site_name} 发送消息 '{message}' 失败，HTTP 错误: {http_err}")
                 except requests.exceptions.ConnectionError as conn_err:
@@ -846,6 +873,126 @@ class GroupChatZone(_PluginBase):
             # 如果所有尝试都失败，抛出异常
             raise MessageSendError(f"向站点 {site_name} 发送消息失败，已重试 {max_attempts} 次")
             
+    def _parse_chat_response(self, html_content: str) -> List[Dict]:
+        """
+        解析站点返回的HTML内容，提取聊天记录
+        :param html_content: HTML内容
+        :return: 聊天记录列表
+        """
+        chat_messages = []
+        try:
+            # 首先尝试使用正则表达式提取聊天记录
+            chat_pattern = r'\[\s*([^]]+)\s*\]\s*([^:]+):(.*?)(?=\[\s*[^]]+\s*\]|$)'
+            matches = re.findall(chat_pattern, html_content, re.DOTALL)
+            
+            for match in matches:
+                time_str = match[0].strip()
+                username = match[1].strip()
+                message = match[2].strip()
+                
+                chat_messages.append({
+                    "time": time_str,
+                    "username": username,
+                    "message": message
+                })
+            
+            # 如果正则表达式没有找到匹配，尝试使用BeautifulSoup解析HTML
+            if not chat_messages:
+                try:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(html_content, 'html.parser')
+                    
+                    # 尝试查找聊天区域
+                    # 这里的选择器需要根据实际站点HTML结构调整
+                    chat_containers = soup.select('div.shoutbox, div.chat-container, table.shoutbox')
+                    
+                    if chat_containers:
+                        for container in chat_containers:
+                            # 查找聊天消息元素
+                            chat_items = container.select('tr, div.chat-item, div.shout-item')
+                            
+                            for item in chat_items:
+                                # 提取时间、用户名和消息
+                                # 这里的选择器需要根据实际站点HTML结构调整
+                                time_elem = item.select_one('span.time, td.time, div.time')
+                                user_elem = item.select_one('span.user, td.user, div.user, a.user')
+                                msg_elem = item.select_one('span.message, td.message, div.message')
+                                
+                                time_str = time_elem.text.strip() if time_elem else ""
+                                username = user_elem.text.strip() if user_elem else ""
+                                message = msg_elem.text.strip() if msg_elem else ""
+                                
+                                # 如果没有找到特定元素，尝试从整个item中提取文本
+                                if not (time_str and username and message):
+                                    text = item.text.strip()
+                                    # 尝试解析文本格式，例如 "[时间] 用户名: 消息"
+                                    match = re.search(r'\[(.*?)\](.*?):(.*)', text)
+                                    if match:
+                                        time_str = match.group(1).strip()
+                                        username = match.group(2).strip()
+                                        message = match.group(3).strip()
+                                
+                                if time_str or username or message:
+                                    chat_messages.append({
+                                        "time": time_str,
+                                        "username": username,
+                                        "message": message
+                                    })
+                except ImportError:
+                    logger.warning("BeautifulSoup库未安装，无法使用高级HTML解析")
+                except Exception as e:
+                    logger.error(f"使用BeautifulSoup解析HTML时出错: {str(e)}")
+            
+            # 如果仍然没有找到聊天记录，尝试查找可能的聊天文本
+            if not chat_messages:
+                # 查找可能包含聊天记录的文本块
+                text_blocks = re.findall(r'<div[^>]*>(.*?)</div>', html_content, re.DOTALL)
+                for block in text_blocks:
+                    # 移除HTML标签
+                    clean_text = re.sub(r'<[^>]*>', ' ', block)
+                    # 查找可能的聊天记录格式
+                    chat_matches = re.findall(r'\[(.*?)\](.*?):(.*?)(?=\[|$)', clean_text)
+                    for match in chat_matches:
+                        time_str = match[0].strip()
+                        username = match[1].strip()
+                        message = match[2].strip()
+                        
+                        if time_str and username:  # 至少有时间和用户名
+                            chat_messages.append({
+                                "time": time_str,
+                                "username": username,
+                                "message": message
+                            })
+            
+            # 去重并按时间排序
+            if chat_messages:
+                # 创建一个集合用于去重
+                seen = set()
+                unique_messages = []
+                
+                for msg in chat_messages:
+                    # 创建一个唯一标识
+                    msg_id = f"{msg['time']}|{msg['username']}|{msg['message']}"
+                    if msg_id not in seen:
+                        seen.add(msg_id)
+                        unique_messages.append(msg)
+                
+                chat_messages = unique_messages
+                
+                # 记录解析结果
+                logger.debug(f"成功解析到 {len(chat_messages)} 条聊天记录")
+                if chat_messages:
+                    logger.debug(f"示例记录: {chat_messages[0]}")
+            else:
+                logger.debug("未能解析到任何聊天记录")
+                
+        except Exception as e:
+            logger.error(f"解析聊天记录时出错: {str(e)}")
+            import traceback
+            logger.debug(f"异常详情: {traceback.format_exc()}")
+        
+        return chat_messages
+
     def stop_service(self):
         """退出插件"""
         try:
