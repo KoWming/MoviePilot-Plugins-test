@@ -30,7 +30,7 @@ class GroupChatZone(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/GroupChat.png"
     # 插件版本
-    plugin_version = "1.2.5"
+    plugin_version = "1.2.7"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -124,10 +124,11 @@ class GroupChatZone(_PluginBase):
                     logger.error(f"启动一次性任务失败: {str(e)}")
 
     # 统一获取站点信息的方法，减少重复代码
-    def __get_site_info(self, refresh=False):
+    def __get_site_info(self, refresh=False, log_update=True):
         """
         获取站点信息并创建映射，支持缓存
         :param refresh: 是否强制刷新缓存
+        :param log_update: 是否记录更新日志
         :return: 包含站点信息和映射的字典
         """
         # 检查缓存是否过期
@@ -156,7 +157,9 @@ class GroupChatZone(_PluginBase):
                     "timestamp": current_time
                 }
                 
-                logger.debug(f"站点信息缓存已更新，共 {len(all_sites)} 个站点")
+                # 只在需要时记录日志
+                if log_update:
+                    logger.debug(f"站点信息缓存已更新，共 {len(all_sites)} 个站点")
             except Exception as e:
                 logger.error(f"获取站点信息失败: {str(e)}")
                 # 如果获取失败但缓存存在，继续使用旧缓存
@@ -186,6 +189,9 @@ class GroupChatZone(_PluginBase):
         return self._enabled
 
     def __update_config(self):
+        # 保存配置时更新站点缓存
+        self.__get_site_info(refresh=True, log_update=True)
+        
         # 保存配置
         self.update_config(
             {
@@ -291,8 +297,8 @@ class GroupChatZone(_PluginBase):
         """
         拼装插件配置页面，需要返回两块数据：1、页面配置；2、数据结构
         """
-        # 使用缓存获取站点信息
-        site_info = self.__get_site_info(refresh=True)  # 刷新缓存确保最新数据
+        # 使用缓存获取站点信息，但不强制刷新，也不记录日志
+        site_info = self.__get_site_info(refresh=False, log_update=False)
         all_sites = site_info["all_sites"]
 
         site_options = [{"title": site.get("name"), "value": site.get("id")} for site in all_sites]
@@ -524,13 +530,14 @@ class GroupChatZone(_PluginBase):
             if self._chat_sites:
                 # 确保 _sites_messages 是字符串
                 site_messages = self._sites_messages if isinstance(self._sites_messages, str) else ""
-                site_msgs = self.parse_site_messages(site_messages)
+                # 执行任务时强制刷新缓存并记录日志
+                site_msgs = self.parse_site_messages(site_messages, refresh_cache=True)
                 self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
         except Exception as e:
             logger.error(f"发送站点消息时发生异常: {str(e)}")
         finally:
             self._running = False
-            if self._lock and self._lock.locked():
+            if self._lock and hasattr(self._lock, 'locked') and self._lock.locked():
                 try:
                     self._lock.release()
                 except RuntimeError:
@@ -538,16 +545,17 @@ class GroupChatZone(_PluginBase):
                     pass
             logger.debug("任务执行完成，锁已释放")
 
-    def parse_site_messages(self, site_messages: str) -> Dict[str, List[str]]:
+    def parse_site_messages(self, site_messages: str, refresh_cache=False) -> Dict[str, List[str]]:
         """
         解析输入的站点消息
         :param site_messages: 多行文本输入
+        :param refresh_cache: 是否刷新站点缓存
         :return: 字典，键为站点名称，值为该站点的消息
         """
         result = {}
         try:
-            # 使用缓存获取站点信息
-            site_info = self.__get_site_info()
+            # 使用缓存获取站点信息，根据参数决定是否刷新
+            site_info = self.__get_site_info(refresh=refresh_cache, log_update=refresh_cache)
             site_id_to_name = site_info["site_id_to_name"]
             
             # 获取选中的站点名称集合
