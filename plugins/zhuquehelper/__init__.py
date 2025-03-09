@@ -226,20 +226,18 @@ class ZhuqueHelper(_PluginBase):
                 "skill_release_bonus": results.get('skill_release', {}).get('bonus', 0),
             }
 
-            # 读取历史记录
-            history = self.get_data('sign_dict') or []
-            if not isinstance(history, list):
-                history = []
-                
-            history.append(sign_dict)
-            
+            sign_data = self.get_data('sign_dict') or []
+            if not isinstance(sign_data, list):
+                sign_data = []
+            sign_data.append(sign_dict)
+
             # 清理过期记录
             if self._history_days:
                 thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
-                history = [record for record in history if
+                sign_data = [record for record in sign_data if
                           datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
-            
-            self.save_data('sign_dict', history)
+
+            self.save_data('sign_dict', sign_data)
         except Exception as e:
             logger.error(f"保存执行记录时发生异常: {e}")
 
@@ -597,8 +595,8 @@ class ZhuqueHelper(_PluginBase):
     def get_page(self) -> List[dict]:
         """获取页面配置"""
         # 查询同步详情
-        historys = self.get_data('sign_dict')
-        if not historys:
+        sign_data = self.get_data('sign_dict') or []
+        if not sign_data:
             return [
                 {
                     'component': 'div',
@@ -609,8 +607,8 @@ class ZhuqueHelper(_PluginBase):
                 }
             ]
 
-        if not isinstance(historys, list):
-            logger.error(f"历史记录格式不正确，类型为: {type(historys)}")
+        if not isinstance(sign_data, list):
+            logger.error(f"历史记录格式不正确，类型为: {type(sign_data)}")
             return [
                 {
                     'component': 'div',
@@ -622,11 +620,11 @@ class ZhuqueHelper(_PluginBase):
             ]
 
         # 按照签到时间倒序
-        historys = sorted(historys, key=lambda x: x.get("date", ""), reverse=True)
+        sign_data = sorted(sign_data, key=lambda x: x.get("date", ""), reverse=True)
 
         # 签到消息
         sign_msgs = []
-        for history in historys:
+        for sign in sign_data:
             sign_msgs.append({
                 'component': 'tr',
                 'props': {
@@ -638,23 +636,23 @@ class ZhuqueHelper(_PluginBase):
                         'props': {
                             'class': 'whitespace-nowrap break-keep text-high-emphasis'
                         },
-                        'text': history.get("date", "")
+                        'text': sign.get("date", "")
                     },
                     {
                         'component': 'td',
-                        'text': history.get("username", "")
+                        'text': sign.get("username", "")
                     },
                     {
                         'component': 'td',
-                        'text': history.get("min_level", "")
+                        'text': sign.get("min_level", "")
                     },
                     {
                         'component': 'td',
-                        'text': f"{history.get('skill_release_bonus', 0)} 💎"
+                        'text': f"{sign.get('skill_release_bonus', 0)} 💎"
                     },
                     {
                         'component': 'td',
-                        'text': f"{history.get('bonus', 0)} 💎"
+                        'text': f"{sign.get('bonus', 0)} 💎"
                     }
                 ]
             })
