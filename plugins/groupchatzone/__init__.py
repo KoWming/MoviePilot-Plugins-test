@@ -231,7 +231,18 @@ class GroupChatZone(_PluginBase):
         """
         if self._enabled and self._cron:
             try:
+                # 检查是否为5位cron表达式
                 if str(self._cron).strip().count(" ") == 4:
+                    # 解析cron表达式
+                    cron_parts = str(self._cron).strip().split()
+                    
+                    # 检查是否为每分钟执行一次 (分钟位为 * 或 */1)
+                    if cron_parts[0] == "*" or cron_parts[0] == "*/1":
+                        logger.warning("检测到每分钟执行一次的配置，已自动调整为默认随机执行")
+                        # 使用随机调度
+                        return self.__get_random_schedule()
+                    
+                    # 正常的cron表达式
                     return [{
                         "id": "GroupChatZone",
                         "name": "站点喊话服务",
@@ -253,51 +264,78 @@ class GroupChatZone(_PluginBase):
                             # 23
                             self._end_time = int(times[1])
                         if self._start_time and self._end_time:
+                            # 检查间隔是否过小（小于1小时）
+                            interval_hours = float(str(cron).strip())
+                            if interval_hours < 1:
+                                logger.warning(f"检测到间隔过小 ({interval_hours}小时)，已自动调整为默认随机执行")
+                                return self.__get_random_schedule()
+                                
                             return [{
                                 "id": "GroupChatZone",
                                 "name": "站点喊话服务",
                                 "trigger": "interval",
                                 "func": self.send_site_messages,
                                 "kwargs": {
-                                    "hours": float(str(cron).strip()),
+                                    "hours": interval_hours,
                                 }
                             }]
                         else:
                             logger.error("站点喊话服务启动失败，周期格式错误")
+                            return self.__get_random_schedule()
                     else:
-                        # 默认0-24 按照周期运行
-                        return [{
-                            "id": "GroupChatZone",
-                            "name": "站点喊话服务",
-                            "trigger": "interval",
-                            "func": self.send_site_messages,
-                            "kwargs": {
-                                "hours": float(str(self._cron).strip()),
-                            }
-                        }]
+                        # 尝试解析为小时间隔
+                        try:
+                            interval_hours = float(str(self._cron).strip())
+                            # 检查间隔是否过小（小于1小时）
+                            if interval_hours < 1:
+                                logger.warning(f"检测到间隔过小 ({interval_hours}小时)，已自动调整为默认随机执行")
+                                return self.__get_random_schedule()
+                                
+                            # 默认0-24 按照周期运行
+                            return [{
+                                "id": "GroupChatZone",
+                                "name": "站点喊话服务",
+                                "trigger": "interval",
+                                "func": self.send_site_messages,
+                                "kwargs": {
+                                    "hours": interval_hours,
+                                }
+                            }]
+                        except ValueError:
+                            logger.error(f"无法解析周期配置: {self._cron}，已自动调整为默认随机执行")
+                            return self.__get_random_schedule()
             except Exception as err:
                 logger.error(f"定时任务配置错误：{str(err)}")
+                return self.__get_random_schedule()
         elif self._enabled:
-            # 随机时间
-            triggers = TimerUtils.random_scheduler(num_executions=1,
-                                                   begin_hour=9,
-                                                   end_hour=23,
-                                                   max_interval=6 * 60,
-                                                   min_interval=2 * 60)
-            ret_jobs = []
-            for trigger in triggers:
-                ret_jobs.append({
-                    "id": f"GroupChatZone|{trigger.hour}:{trigger.minute}",
-                    "name": "站点喊话服务",
-                    "trigger": "cron",
-                    "func": self.send_site_messages,
-                    "kwargs": {
-                        "hour": trigger.hour,
-                        "minute": trigger.minute
-                    }
-                })
-            return ret_jobs
+            # 使用随机调度
+            return self.__get_random_schedule()
         return []
+
+    def __get_random_schedule(self) -> List[Dict[str, Any]]:
+        """
+        获取随机调度配置
+        :return: 随机调度配置列表
+        """
+        # 随机时间
+        triggers = TimerUtils.random_scheduler(num_executions=1,
+                                               begin_hour=9,
+                                               end_hour=23,
+                                               max_interval=6 * 60,
+                                               min_interval=2 * 60)
+        ret_jobs = []
+        for trigger in triggers:
+            ret_jobs.append({
+                "id": f"GroupChatZone|{trigger.hour}:{trigger.minute}",
+                "name": "站点喊话服务",
+                "trigger": "cron",
+                "func": self.send_site_messages,
+                "kwargs": {
+                    "hour": trigger.hour,
+                    "minute": trigger.minute
+                }
+            })
+        return ret_jobs
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         """
@@ -440,7 +478,7 @@ class GroupChatZone(_PluginBase):
                                         'props': {
                                             'model': 'sites_messages',
                                             'label': '发送消息',
-                                            'rows': 8,
+                                            'rows': 6,
                                             'placeholder': '每一行一个配置，配置方式：\n'
                                                            '站点名称|消息内容1|消息内容2|消息内容3|...\n'
                                         }
