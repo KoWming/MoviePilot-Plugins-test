@@ -42,7 +42,7 @@ class ZhuqueHelper(_PluginBase):
     _cookie: Optional[str] = None
     _onlyonce: bool = False
     _notify: bool = False
-    _history_days: Optional[int] = None
+    _history_count: Optional[int] = None
     _level_up: Optional[bool] = None
     _skill_release: Optional[bool] = None
     _target_level: Optional[int] = None
@@ -63,7 +63,7 @@ class ZhuqueHelper(_PluginBase):
             self._cookie = config.get("cookie")
             self._notify = config.get("notify", False)
             self._onlyonce = config.get("onlyonce", False)
-            self._history_days = int(config.get("history_days", 15))
+            self._history_count = int(config.get("history_count", 15))
             self._level_up = config.get("level_up", False)
             self._skill_release = config.get("skill_release", False)
             self._target_level = int(config.get("target_level", 79))
@@ -88,7 +88,7 @@ class ZhuqueHelper(_PluginBase):
                         "enabled": self._enabled,
                         "cookie": self._cookie,
                         "notify": self._notify,
-                        "history_days": self._history_days,
+                        "history_count": self._history_count,
                         "level_up": self._level_up,
                         "skill_release": self._skill_release,
                         "target_level": self._target_level,
@@ -169,6 +169,11 @@ class ZhuqueHelper(_PluginBase):
                 # 读取历史记录
                 history = self.get_data('sign_dict') or []
                 history.append(sign_dict)
+                
+                # 只保留最新的N条记录
+                if len(history) > self._history_count:
+                    history = sorted(history, key=lambda x: x.get("date") or "", reverse=True)[:self._history_count]
+                
                 self.save_data(key="sign_dict", value=history)
 
                 # 发送通知
@@ -177,10 +182,6 @@ class ZhuqueHelper(_PluginBase):
                         mtype=NotificationType.SiteMessage,
                         title="【任务执行完成】",
                         text=f"{rich_text_report}")
-
-                thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
-                history = [record for record in history if
-                        datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
 
             except requests.exceptions.RequestException as e:
                 logger.error(f"请求用户信息时发生异常: {e}，响应内容：{res.text if 'res' in locals() else '无响应'}")
@@ -455,8 +456,8 @@ class ZhuqueHelper(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'history_days',
-                                            'label': '保留历史天数'
+                                            'model': 'history_count',
+                                            'label': '保留历史条数'
                                         }
                                     }
                                 ]
@@ -493,7 +494,7 @@ class ZhuqueHelper(_PluginBase):
             "level_up": False,
             "skill_release": False,
             "cookie": "",
-            "history_days": 15,
+            "history_count": 15,
             "cron": "0 9 * * *",
             "target_level": 79,
         }
@@ -525,14 +526,10 @@ class ZhuqueHelper(_PluginBase):
                 }
             ]
 
-        # 根据保留历史天数过滤记录
-        if self._history_days:
-            thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
-            historys = [record for record in historys if
-                      datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
-
-        # 按照签到时间倒序
-        historys = sorted(historys, key=lambda x: x.get("date") or 0, reverse=True)
+        # 按照签到时间倒序并限制显示条数
+        historys = sorted(historys, key=lambda x: x.get("date") or "", reverse=True)
+        if self._history_count:
+            historys = historys[:self._history_count]
 
         # 签到消息
         sign_msgs = [
