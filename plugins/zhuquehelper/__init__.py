@@ -63,7 +63,7 @@ class ZhuqueHelper(_PluginBase):
             self._cookie = config.get("cookie")
             self._notify = config.get("notify", False)
             self._onlyonce = config.get("onlyonce", False)
-            self._history_count = int(config.get("history_count", 15))
+            self._history_count = int(config.get("history_count", 10))
             self._level_up = config.get("level_up", False)
             self._skill_release = config.get("skill_release", False)
             self._target_level = int(config.get("target_level", 79))
@@ -119,7 +119,7 @@ class ZhuqueHelper(_PluginBase):
                 return
 
             csrfToken = csrfToken[0]
-            logger.info(f"获取成功：{csrfToken}")
+            logger.info(f"获取csrfToken成功：{csrfToken}")
 
             headers = {
                 "cookie": self._cookie,
@@ -140,7 +140,7 @@ class ZhuqueHelper(_PluginBase):
                     logger.error("获取用户名失败！响应内容：%s", res.text)
                     return
 
-                logger.info(f"获取成功：{username}")
+                logger.info(f"获取用户名成功：{username}")
 
                 # 开始执行
                 logger.info("开始获取用户信息...")
@@ -494,7 +494,7 @@ class ZhuqueHelper(_PluginBase):
             "level_up": False,
             "skill_release": False,
             "cookie": "",
-            "history_count": 15,
+            "history_count": 10,
             "cron": "0 9 * * *",
             "target_level": 79,
         }
