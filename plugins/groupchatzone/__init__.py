@@ -231,7 +231,36 @@ class GroupChatZone(_PluginBase):
         """
         if self._enabled and self._cron:
             try:
+                # 检查是否为标准cron表达式
                 if str(self._cron).strip().count(" ") == 4:
+                    # 解析cron表达式，检查是否为每分钟执行
+                    cron_parts = str(self._cron).strip().split()
+                    if cron_parts[0] == "*" and cron_parts[1] == "*" and cron_parts[2] == "*" and cron_parts[3] == "*" and cron_parts[4] == "*":
+                        logger.warning("检测到每分钟执行的cron表达式，已自动切换为默认随机执行模式")
+                        # 清空cron表达式，使用默认随机执行模式
+                        self._cron = ""
+                        self.__update_config(refresh_cache=False)
+                        
+                        # 使用随机时间，确保每天只执行有限次数
+                        triggers = TimerUtils.random_scheduler(num_executions=1,
+                                                            begin_hour=9,
+                                                            end_hour=23,
+                                                            max_interval=6 * 60,
+                                                            min_interval=2 * 60)
+                        ret_jobs = []
+                        for trigger in triggers:
+                            ret_jobs.append({
+                                "id": f"GroupChatZone|{trigger.hour}:{trigger.minute}",
+                                "name": "站点喊话服务",
+                                "trigger": "cron",
+                                "func": self.send_site_messages,
+                                "kwargs": {
+                                    "hour": trigger.hour,
+                                    "minute": trigger.minute
+                                }
+                            })
+                        return ret_jobs
+                    
                     return [{
                         "id": "GroupChatZone",
                         "name": "站点喊话服务",
@@ -240,11 +269,23 @@ class GroupChatZone(_PluginBase):
                         "kwargs": {}
                     }]
                 else:
-                    # 2.3/9-23
+                    # 处理自定义格式 2.3/9-23
                     crons = str(self._cron).strip().split("/")
                     if len(crons) == 2:
                         # 2.3
                         cron = crons[0]
+                        try:
+                            hours_interval = float(str(cron).strip())
+                            # 检查间隔是否小于1小时
+                            if hours_interval < 1.0:
+                                logger.warning(f"检测到间隔时间过短: {hours_interval}小时，已自动调整为1小时")
+                                hours_interval = 1.0
+                                self._cron = f"1.0/{crons[1]}"
+                                self.__update_config(refresh_cache=False)
+                        except ValueError:
+                            logger.error(f"无效的小时间隔值: {cron}")
+                            return []
+                            
                         # 9-23
                         times = crons[1].split("-")
                         if len(times) == 2:
@@ -252,33 +293,46 @@ class GroupChatZone(_PluginBase):
                             self._start_time = int(times[0])
                             # 23
                             self._end_time = int(times[1])
-                        if self._start_time and self._end_time:
+                        if self._start_time is not None and self._end_time is not None:
                             return [{
                                 "id": "GroupChatZone",
                                 "name": "站点喊话服务",
                                 "trigger": "interval",
                                 "func": self.send_site_messages,
                                 "kwargs": {
-                                    "hours": float(str(cron).strip()),
+                                    "hours": hours_interval,
                                 }
                             }]
                         else:
                             logger.error("站点喊话服务启动失败，周期格式错误")
                     else:
-                        # 默认0-24 按照周期运行
-                        return [{
-                            "id": "GroupChatZone",
-                            "name": "站点喊话服务",
-                            "trigger": "interval",
-                            "func": self.send_site_messages,
-                            "kwargs": {
-                                "hours": float(str(self._cron).strip()),
-                            }
-                        }]
+                        # 检查是否为纯数字（小时间隔）
+                        try:
+                            hours_interval = float(str(self._cron).strip())
+                            # 检查间隔是否小于1小时
+                            if hours_interval < 1.0:
+                                logger.warning(f"检测到间隔时间过短: {hours_interval}小时，已自动调整为1小时")
+                                hours_interval = 1.0
+                                self._cron = "1.0"
+                                self.__update_config(refresh_cache=False)
+                            
+                            # 默认0-24 按照周期运行
+                            return [{
+                                "id": "GroupChatZone",
+                                "name": "站点喊话服务",
+                                "trigger": "interval",
+                                "func": self.send_site_messages,
+                                "kwargs": {
+                                    "hours": hours_interval,
+                                }
+                            }]
+                        except ValueError:
+                            logger.error(f"无效的cron表达式: {self._cron}")
+                            return []
             except Exception as err:
                 logger.error(f"定时任务配置错误：{str(err)}")
         elif self._enabled:
-            # 随机时间
+            # 随机时间，确保每天只执行有限次数
             triggers = TimerUtils.random_scheduler(num_executions=1,
                                                    begin_hour=9,
                                                    end_hour=23,
@@ -440,9 +494,33 @@ class GroupChatZone(_PluginBase):
                                         'props': {
                                             'model': 'sites_messages',
                                             'label': '发送消息',
-                                            'rows': 8,
+                                            'rows': 6,
                                             'placeholder': '每一行一个配置，配置方式：\n'
                                                            '站点名称|消息内容1|消息内容2|消息内容3|...\n'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VAlert',
+                                        'props': {
+                                            'type': 'warning',
+                                            'variant': 'tonal',
+                                            'text': '安全提示：'
+                                                    '为保护站点安全，不允许每分钟执行一次的定时任务。'
+                                                    '如果检测到这种配置，将自动切换为默认的随机执行模式（每天9-23点随机执行一次）。'
+                                                    '同样，小于1小时的间隔也会被调整为1小时。'
                                         }
                                     }
                                 ]
@@ -464,7 +542,7 @@ class GroupChatZone(_PluginBase):
                                             'type': 'info',
                                             'variant': 'tonal',
                                             'text': '配置注意事项：'
-                                                    '1、注意定时任务设置，避免每分钟执行一次导致频繁请求；'
+                                                    '1、注意定时任务设置，避免频繁请求；'
                                                     '2、消息发送执行间隔(秒)不能小于0，也不建议设置过大。1~5秒即可，设置过大可能导致线程运行时间过长；'
                                                     '3、如配置有全局代理，会默认调用全局代理执行。'
                                         }
