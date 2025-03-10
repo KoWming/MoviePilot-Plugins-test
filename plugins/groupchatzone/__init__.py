@@ -107,9 +107,18 @@ class GroupChatZone(_PluginBase):
                     # 定时服务
                     self._scheduler = BackgroundScheduler(timezone=settings.TZ)
                     logger.info("站点喊话服务启动，立即运行一次")
-                    self._scheduler.add_job(func=self.send_site_messages, trigger='date',
-                                            run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                            name="站点喊话服务")
+                    
+                    # 确保使用带时区的日期时间
+                    tz = pytz.timezone(settings.TZ)
+                    now = datetime.now(tz)
+                    run_date = now + timedelta(seconds=3)
+                    
+                    self._scheduler.add_job(
+                        func=self.send_site_messages, 
+                        trigger='date',
+                        run_date=run_date,
+                        name="站点喊话服务"
+                    )
 
                     # 关闭一次性开关
                     self._onlyonce = False
@@ -656,7 +665,7 @@ class GroupChatZone(_PluginBase):
         try:
             # 获取已选站点的名称集合
             selected_sites = self.get_selected_sites()
-            valid_site_names = {site.get("name").strip() for site in selected_sites}
+            valid_site_names = {site.get("name").strip() if site.get("name") else "" for site in selected_sites}
             
             logger.debug(f"有效站点名称列表: {valid_site_names}")
 
@@ -714,7 +723,7 @@ class GroupChatZone(_PluginBase):
         for site in selected_sites:
             site_name = site.get("name")
             logger.info(f"开始处理站点: {site_name}")
-            messages = site_msgs.get(site_name, [])
+            messages = site_msgs.get(site_name, []) if site_name else []
 
             if not messages:
                 logger.warning(f"站点 {site_name} 没有需要发送的消息！")
@@ -756,7 +765,11 @@ class GroupChatZone(_PluginBase):
                 notification_text += f"【{site_name}】成功发送{success_count}条信息，失败{failure_count}条\n"
                 if failed_messages:
                     notification_text += f"失败的消息: {', '.join(failed_messages)}\n"
-            notification_text += f"\n{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}"
+                    
+            # 使用带时区的时间戳
+            tz = pytz.timezone(settings.TZ)
+            current_time = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+            notification_text += f"\n{current_time}"
 
             self.post_message(
                 mtype=NotificationType.SiteMessage,
@@ -766,7 +779,7 @@ class GroupChatZone(_PluginBase):
 
         # 检查是否所有消息都发送成功
         all_successful = all(result["success_count"] == len(site_msgs.get(site_name, [])) 
-                            for site_name, result in site_results.items())
+                            for site_name, result in site_results.items() if site_name)
         if all_successful:
             logger.info("所有站点的消息发送成功。")
         else:
