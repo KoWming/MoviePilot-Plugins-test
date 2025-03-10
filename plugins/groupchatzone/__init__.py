@@ -141,9 +141,16 @@ class GroupChatZone(_PluginBase):
         """
         # 如果需要强制刷新缓存，则清空缓存
         if refresh and self._site_cache:
-            self._site_cache.clear()
-            self._cache_initialized = False
+            try:
+                self._site_cache.clear()
+                self._cache_initialized = False
+            except Exception as e:
+                logger.error(f"清空缓存失败: {str(e)}")
+                # 重新初始化缓存
+                self._site_cache = TTLCache(maxsize=1, ttl=self._cache_ttl)
+                self._cache_initialized = False
             
+        # 如果缓存未初始化或为空，则获取站点信息
         if not self._cache_initialized or not self._site_cache:
             try:
                 # 获取所有站点信息
@@ -165,8 +172,24 @@ class GroupChatZone(_PluginBase):
                 }
                 
                 # 存入缓存
-                self._site_cache["site_info"] = site_info
-                self._cache_initialized = True
+                if self._site_cache is not None:
+                    try:
+                        self._site_cache["site_info"] = site_info
+                        self._cache_initialized = True
+                    except Exception as e:
+                        logger.error(f"更新缓存失败: {str(e)}")
+                        # 如果缓存操作失败，直接返回站点信息
+                        return site_info
+                else:
+                    # 如果缓存对象为None，重新初始化
+                    self._site_cache = TTLCache(maxsize=1, ttl=self._cache_ttl)
+                    try:
+                        self._site_cache["site_info"] = site_info
+                        self._cache_initialized = True
+                    except Exception as e:
+                        logger.error(f"初始化缓存失败: {str(e)}")
+                        # 如果缓存操作失败，直接返回站点信息
+                        return site_info
                 
                 if log_update:
                     logger.debug(f"站点信息缓存已更新，共 {len(all_sites)} 个站点")
@@ -185,7 +208,30 @@ class GroupChatZone(_PluginBase):
                 return empty_info
         
         # 从缓存中获取站点信息
-        return self._site_cache.get("site_info", {})
+        try:
+            if self._site_cache is not None:
+                return self._site_cache.get("site_info", {})
+            else:
+                # 如果缓存对象为None，返回空结构
+                empty_info = {
+                    "all_sites": [],
+                    "site_id_to_name": {},
+                    "site_id_to_obj": {},
+                    "site_name_to_obj": {},
+                    "all_site_ids": []
+                }
+                return empty_info
+        except Exception as e:
+            logger.error(f"从缓存获取站点信息失败: {str(e)}")
+            # 如果缓存操作失败，返回空结构
+            empty_info = {
+                "all_sites": [],
+                "site_id_to_name": {},
+                "site_id_to_obj": {},
+                "site_name_to_obj": {},
+                "all_site_ids": []
+            }
+            return empty_info
 
     def __get_all_site_ids(self, log_update=True) -> List[str]:
         """
@@ -265,15 +311,17 @@ class GroupChatZone(_PluginBase):
                                 "func": self.send_site_messages,
                                 "kwargs": {
                                     "hour": trigger.hour,
-                                    "minute": trigger.minute
+                                    "minute": trigger.minute,
+                                    "timezone": settings.TZ  # 确保设置时区
                                 }
                             })
                         return ret_jobs
                     
+                    # 使用 CronTrigger 时确保设置时区
                     return [{
                         "id": "GroupChatZone",
                         "name": "站点喊话服务",
-                        "trigger": CronTrigger.from_crontab(self._cron),
+                        "trigger": CronTrigger.from_crontab(self._cron, timezone=pytz.timezone(settings.TZ)),
                         "func": self.send_site_messages,
                         "kwargs": {}
                     }]
@@ -310,6 +358,7 @@ class GroupChatZone(_PluginBase):
                                 "func": self.send_site_messages,
                                 "kwargs": {
                                     "hours": hours_interval,
+                                    "timezone": settings.TZ  # 确保设置时区
                                 }
                             }]
                         else:
@@ -333,6 +382,7 @@ class GroupChatZone(_PluginBase):
                                 "func": self.send_site_messages,
                                 "kwargs": {
                                     "hours": hours_interval,
+                                    "timezone": settings.TZ  # 确保设置时区
                                 }
                             }]
                         except ValueError:
@@ -356,7 +406,8 @@ class GroupChatZone(_PluginBase):
                     "func": self.send_site_messages,
                     "kwargs": {
                         "hour": trigger.hour,
-                        "minute": trigger.minute
+                        "minute": trigger.minute,
+                        "timezone": settings.TZ  # 确保设置时区
                     }
                 })
             return ret_jobs
