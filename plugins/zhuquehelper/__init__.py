@@ -23,7 +23,7 @@ class ZhuqueHelper(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/KoWming/MoviePilot-Plugins/main/icons/zhuquehelper.png"
     # 插件版本
-    plugin_version = "1.2"  # 更新版本号
+    plugin_version = "1.2.1"
     # 插件作者
     plugin_author = "KoWming"
     # 作者主页
@@ -276,11 +276,11 @@ class ZhuqueHelper(_PluginBase):
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
         """获取命令"""
-        return []
+        pass
 
     def get_api(self) -> List[Dict[str, Any]]:
         """获取API"""
-        return []
+        pass
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
@@ -524,6 +524,12 @@ class ZhuqueHelper(_PluginBase):
                     }
                 }
             ]
+
+        # 根据保留历史天数过滤记录
+        if self._history_days:
+            thirty_days_ago = time.time() - int(self._history_days) * 24 * 60 * 60
+            historys = [record for record in historys if
+                      datetime.strptime(record["date"], '%Y-%m-%d %H:%M:%S').timestamp() >= thirty_days_ago]
 
         # 按照签到时间倒序
         historys = sorted(historys, key=lambda x: x.get("date") or 0, reverse=True)
