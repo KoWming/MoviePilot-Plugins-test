@@ -57,9 +57,9 @@ class GroupChatZone(_PluginBase):
     _notify: bool = False
     _interval_cnt: int = 2
     _chat_sites: List[str] = []
-    _sites_messages: str = ""  # 修正类型为字符串
-    _start_time: Optional[int] = None  # 修正类型注解
-    _end_time: Optional[int] = None    # 修正类型注解
+    _sites_messages: str = ""
+    _start_time: Optional[int] = None
+    _end_time: Optional[int] = None
     _lock: Optional[threading.Lock] = None
     _running: bool = False
     
@@ -90,12 +90,11 @@ class GroupChatZone(_PluginBase):
             self._chat_sites = config.get("chat_sites", [])
             self._sites_messages = str(config.get("sites_messages", ""))
 
-            # 过滤掉已删除的站点 - 优化数据库访问
-            # 只获取一次站点列表，不记录日志
+            # 过滤掉已删除的站点 - 只获取一次站点列表
             all_site_ids = self.__get_all_site_ids(log_update=False)
             self._chat_sites = [site_id for site_id in self._chat_sites if site_id in all_site_ids]
 
-            # 保存配置，但不再主动刷新缓存
+            # 保存配置，不主动刷新缓存
             self.__update_config(refresh_cache=False)
 
         # 加载模块
@@ -123,7 +122,6 @@ class GroupChatZone(_PluginBase):
                 except Exception as e:
                     logger.error(f"启动一次性任务失败: {str(e)}")
 
-    # 统一获取站点信息的方法，减少重复代码
     def __get_site_info(self, refresh=False, log_update=True):
         """
         获取站点信息并创建映射，支持缓存
@@ -141,7 +139,7 @@ class GroupChatZone(_PluginBase):
                 # 获取所有站点信息
                 all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
                 
-                # 创建各种映射
+                # 创建映射
                 site_id_to_name = {site.get("id"): site.get("name") for site in all_sites}
                 site_id_to_obj = {site.get("id"): site for site in all_sites}
                 site_name_to_obj = {site.get("name"): site for site in all_sites}
@@ -157,12 +155,11 @@ class GroupChatZone(_PluginBase):
                     "timestamp": current_time
                 }
                 
-                # 只在需要时记录日志
                 if log_update:
                     logger.debug(f"站点信息缓存已更新，共 {len(all_sites)} 个站点")
             except Exception as e:
                 logger.error(f"获取站点信息失败: {str(e)}")
-                # 如果获取失败但缓存存在，继续使用旧缓存
+
                 if not self._site_cache:
                     # 如果没有缓存，创建空缓存结构
                     self._site_cache = {
@@ -173,10 +170,8 @@ class GroupChatZone(_PluginBase):
                         "all_site_ids": [],
                         "timestamp": current_time
                     }
-        
         return self._site_cache
 
-    # 修改获取所有站点ID的方法，使用缓存
     def __get_all_site_ids(self, log_update=True) -> List[str]:
         """
         获取所有站点ID（内置站点 + 自定义站点）
@@ -194,7 +189,6 @@ class GroupChatZone(_PluginBase):
         更新配置
         :param refresh_cache: 是否刷新站点缓存
         """
-        # 根据参数决定是否刷新缓存
         if refresh_cache:
             self.__get_site_info(refresh=True, log_update=True)
         
@@ -303,7 +297,7 @@ class GroupChatZone(_PluginBase):
         """
         拼装插件配置页面，需要返回两块数据：1、页面配置；2、数据结构
         """
-        # 使用缓存获取站点信息，但不强制刷新，也不记录日志
+        # 使用缓存获取站点信息，但不强制刷新
         site_info = self.__get_site_info(refresh=False, log_update=False)
         all_sites = site_info["all_sites"]
 
@@ -432,7 +426,7 @@ class GroupChatZone(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 12
+                                    'md': 8
                                 },
                                 'content': [
                                     {
@@ -523,7 +517,6 @@ class GroupChatZone(_PluginBase):
         """
         自动向站点发送消息
         """
-        # 使用try-finally确保锁一定会被释放
         if not self._lock:
             self._lock = threading.Lock()
             
@@ -534,13 +527,9 @@ class GroupChatZone(_PluginBase):
         try:
             self._running = True
             if self._chat_sites:
-                # 确保 _sites_messages 是字符串
                 site_messages = self._sites_messages if isinstance(self._sites_messages, str) else ""
-                
-                # 先刷新一次缓存，后续操作都使用缓存，避免多次刷新
                 self.__get_site_info(refresh=True, log_update=True)
                 
-                # 使用已刷新的缓存，不再重复刷新
                 site_msgs = self.parse_site_messages(site_messages, refresh_cache=False)
                 self.__send_msgs(do_sites=self._chat_sites, site_msgs=site_msgs)
         except Exception as e:
@@ -551,7 +540,6 @@ class GroupChatZone(_PluginBase):
                 try:
                     self._lock.release()
                 except RuntimeError:
-                    # 处理可能的"释放未锁定的锁"错误
                     pass
             logger.debug("任务执行完成，锁已释放")
 
@@ -564,14 +552,11 @@ class GroupChatZone(_PluginBase):
         """
         result = {}
         try:
-            # 使用缓存获取站点信息，根据参数决定是否刷新
             site_info = self.__get_site_info(refresh=refresh_cache, log_update=refresh_cache)
             site_id_to_name = site_info["site_id_to_name"]
             
             # 获取选中的站点名称集合
             selected_site_names = {site_id_to_name[site_id] for site_id in self._chat_sites if site_id in site_id_to_name}
-            
-            # 降低日志级别，减少不必要的INFO日志
             logger.debug(f"获取到的选中站点名称列表: {selected_site_names}")
 
             # 按行分割配置
@@ -586,14 +571,12 @@ class GroupChatZone(_PluginBase):
                         else:
                             logger.warn(f"站点 {site_name} 没有有效的消息内容")
                     else:
-                        # 降低日志级别，减少不必要的警告
                         logger.debug(f"站点 {site_name} 不在选中列表中")
                 else:
                     logger.warn(f"配置行格式错误，缺少分隔符: {line}")
         except Exception as e:
             logger.error(f"解析站点消息时出现异常: {str(e)}")
         
-        # 降低日志级别，减少不必要的INFO日志
         logger.debug(f"站点消息解析完成，解析结果: {result}")
         return result
 
@@ -601,7 +584,6 @@ class GroupChatZone(_PluginBase):
         """
         发送消息逻辑
         """
-        # 使用缓存获取站点信息，不刷新缓存
         site_info = self.__get_site_info(refresh=False, log_update=False)
         site_id_map = site_info["site_id_to_obj"]
         
@@ -619,7 +601,6 @@ class GroupChatZone(_PluginBase):
             logger.info(f"开始处理站点: {site_name}")
             messages = site_msgs.get(site_name, [])
 
-            # 添加消息列表空值检查
             if not messages:
                 logger.warning(f"站点 {site_name} 没有需要发送的消息！")
                 continue
@@ -636,7 +617,7 @@ class GroupChatZone(_PluginBase):
                     logger.error(f"向站点 {site_name} 发送消息 '{message}' 失败: {str(e)}")
                     failure_count += 1
                     failed_messages.append(message)
-                # 修改间隔判断逻辑
+
                 if i < len(messages) - 1:
                     logger.info(f"等待 {self._interval_cnt} 秒后继续发送下一条消息...")
                     start_time = time.time()
@@ -675,7 +656,6 @@ class GroupChatZone(_PluginBase):
         else:
             logger.info("部分消息发送失败！！！")
 
-        # 任务完成后不需要刷新缓存
         self.__update_config(refresh_cache=False)
 
     def send_message_to_site(self, site_info: CommentedMap, message: str):
@@ -697,7 +677,7 @@ class GroupChatZone(_PluginBase):
             logger.error(f"站点 {site_name} 缺少必要信息，无法发送消息！")
             return
 
-        # 预先构建URL和请求参数
+        # 构建URL和请求参数
         send_url = urljoin(site_url, "/shoutbox.php")
         headers = {
             'User-Agent': ua,
@@ -716,18 +696,15 @@ class GroupChatZone(_PluginBase):
             total=3,
             backoff_factor=1,
             status_forcelist=[403, 404, 500, 502, 503, 504],
-            allowed_methods=frozenset(['GET']),  # 使用frozenset提高性能
+            allowed_methods=frozenset(['GET']),
             raise_on_status=False
         )
 
-        # 创建一个adapter并复用
         adapter = HTTPAdapter(max_retries=retries, pool_connections=1, pool_maxsize=1)
 
-        # 使用with语句确保资源正确释放
         with requests.Session() as session:
-            # 一次性设置所有session属性
             session.headers.update(headers)
-            if proxies:  # 添加对proxies为None的处理
+            if proxies:
                 session.proxies = proxies
             session.mount('https://', adapter)
             session.mount('http://', adapter)
@@ -743,7 +720,7 @@ class GroupChatZone(_PluginBase):
                         send_url, 
                         params=params,
                         timeout=(3.05, 10),
-                        allow_redirects=False  # 禁止重定向提高性能
+                        allow_redirects=False
                     )
                     response.raise_for_status()
                     logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
@@ -776,7 +753,6 @@ class GroupChatZone(_PluginBase):
                         self._lock.acquire()
                         self._lock.release()
                     except:
-                        # 忽略锁相关错误
                         pass
                 if hasattr(self._scheduler, 'remove_all_jobs'):
                     self._scheduler.remove_all_jobs()
@@ -797,23 +773,18 @@ class GroupChatZone(_PluginBase):
             self._chat_sites = self.__remove_site_id(config.get("chat_sites") or [], site_id)
             # 保存配置，并刷新缓存
             self.__update_config(refresh_cache=True)
-            # 不需要再次清空缓存，因为__update_config已经刷新了
-            # self._site_cache = {}
 
     def __remove_site_id(self, do_sites, site_id):
         if do_sites:
             if isinstance(do_sites, str):
                 do_sites = [do_sites]
-
             # 删除对应站点
             if site_id:
                 do_sites = [site for site in do_sites if int(site) != int(site_id)]
             else:
                 # 清空
                 do_sites = []
-
             # 若无站点，则停止
             if len(do_sites) == 0:
                 self._enabled = False
-
         return do_sites
