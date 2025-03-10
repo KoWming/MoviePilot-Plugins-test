@@ -432,7 +432,7 @@ class GroupChatZone(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 8
+                                    'md': 12
                                 },
                                 'content': [
                                     {
@@ -549,6 +549,24 @@ class GroupChatZone(_PluginBase):
                     pass
             logger.debug("任务执行完成，锁已释放")
 
+    def get_selected_sites(self) -> List[Dict[str, Any]]:
+        """
+        获取已选中的站点对象列表
+        :return: 站点对象列表
+        """
+        site_info = self.__get_site_info(refresh=False, log_update=False)
+        site_id_map = site_info.get("site_id_to_obj", {})
+        
+        # 过滤掉不存在的站点ID
+        selected_sites = []
+        for site_id in self._chat_sites:
+            if site_id in site_id_map:
+                selected_sites.append(site_id_map[site_id])
+            else:
+                logger.warning(f"站点ID {site_id} 不存在或已被删除")
+        
+        return selected_sites
+
     def parse_site_messages(self, site_messages: str, refresh_cache=False) -> Dict[str, List[str]]:
         """
         解析输入的站点消息
@@ -558,51 +576,64 @@ class GroupChatZone(_PluginBase):
         """
         result = {}
         try:
-            site_info = self.__get_site_info(refresh=refresh_cache, log_update=refresh_cache)
-            site_id_to_name = site_info["site_id_to_name"]
+            # 获取已选站点的名称集合
+            selected_sites = self.get_selected_sites()
+            valid_site_names = {site.get("name").strip() for site in selected_sites}
             
-            # 获取选中的站点名称集合
-            selected_site_names = {site_id_to_name[site_id] for site_id in self._chat_sites if site_id in site_id_to_name}
-            logger.debug(f"获取到的选中站点名称列表: {selected_site_names}")
+            logger.debug(f"有效站点名称列表: {valid_site_names}")
 
-            # 按行分割配置
-            for line in site_messages.strip().splitlines():
+            # 按行解析配置
+            for line_num, line in enumerate(site_messages.strip().splitlines(), 1):
+                line = line.strip()
+                if not line:
+                    continue  # 跳过空行
+
+                # 分割配置项
                 parts = line.split("|")
-                if len(parts) > 1:
-                    site_name = parts[0].strip()
-                    if site_name in selected_site_names:
-                        messages = [msg.strip() for msg in parts[1:] if msg.strip()]
-                        if messages:
-                            result[site_name] = messages
-                        else:
-                            logger.warn(f"站点 {site_name} 没有有效的消息内容")
-                    else:
-                        logger.debug(f"站点 {site_name} 不在选中列表中")
+                if len(parts) < 2:
+                    logger.warning(f"第{line_num}行格式错误，缺少分隔符: {line}")
+                    continue
+
+                # 解析站点名称和消息
+                site_name = parts[0].strip()
+                messages = [msg.strip() for msg in parts[1:] if msg.strip()]
+                
+                if not messages:
+                    logger.warning(f"第{line_num}行 [{site_name}] 没有有效消息内容")
+                    continue
+
+                # 验证站点有效性
+                if site_name not in valid_site_names:
+                    logger.warning(f"第{line_num}行 [{site_name}] 不在选中站点列表中")
+                    continue
+
+                # 合并相同站点的消息
+                if site_name in result:
+                    result[site_name].extend(messages)
+                    logger.debug(f"合并站点 [{site_name}] 的消息，当前数量：{len(result[site_name])}")
                 else:
-                    logger.warn(f"配置行格式错误，缺少分隔符: {line}")
+                    result[site_name] = messages
+
         except Exception as e:
-            logger.error(f"解析站点消息时出现异常: {str(e)}")
-        
-        logger.debug(f"站点消息解析完成，解析结果: {result}")
-        return result
+            logger.error(f"解析站点消息时出现异常: {str(e)}", exc_info=True)
+        finally:
+            logger.info(f"解析完成，共配置 {len(result)} 个有效站点的消息")
+            return result
 
     def __send_msgs(self, do_sites: list, site_msgs: Dict[str, List[str]]):
         """
         发送消息逻辑
         """
-        site_info = self.__get_site_info(refresh=False, log_update=False)
-        site_id_map = site_info["site_id_to_obj"]
+        # 获取站点对象
+        selected_sites = self.get_selected_sites()
         
-        # 过滤掉没有选中的站点
-        do_site_objects = [site_id_map[site_id] for site_id in do_sites if site_id in site_id_map]
-
-        if not do_site_objects:
+        if not selected_sites:
             logger.info("没有需要发送消息的站点！")
             return
 
         # 执行站点发送消息
         site_results = {}
-        for site in do_site_objects:
+        for site in selected_sites:
             site_name = site.get("name")
             logger.info(f"开始处理站点: {site_name}")
             messages = site_msgs.get(site_name, [])
@@ -638,7 +669,7 @@ class GroupChatZone(_PluginBase):
 
         # 发送通知
         if self._notify:
-            total_sites = len(do_site_objects)
+            total_sites = len(selected_sites)
             notification_text = f"全部站点数量: {total_sites}\n"
             for site_name, result in site_results.items():
                 success_count = result["success_count"]
@@ -656,7 +687,8 @@ class GroupChatZone(_PluginBase):
             )
 
         # 检查是否所有消息都发送成功
-        all_successful = all(result["success_count"] == len(messages) for site_name, messages in site_msgs.items() if (result := site_results.get(site_name)))
+        all_successful = all(result["success_count"] == len(site_msgs.get(site_name, [])) 
+                            for site_name, result in site_results.items())
         if all_successful:
             logger.info("所有站点的消息发送成功。")
         else:
