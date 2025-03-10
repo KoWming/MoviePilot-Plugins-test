@@ -7,6 +7,7 @@ from typing import Any, List, Dict, Tuple, Optional
 from urllib.parse import urljoin
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from cachetools import TTLCache, cached
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -63,9 +64,10 @@ class GroupChatZone(_PluginBase):
     _lock: Optional[threading.Lock] = None
     _running: bool = False
     
-    # 缓存站点信息
-    _site_cache: Dict[str, Any] = {}
-    _cache_expire_time: int = 3600  # 缓存过期时间（秒）
+    # 缓存设置
+    _cache_ttl: int = 3600  # 缓存过期时间（秒）
+    _site_cache: Optional[TTLCache] = None
+    _cache_initialized: bool = False
 
     def init_plugin(self, config: Optional[dict] = None):
         self._lock = threading.Lock()
@@ -73,15 +75,14 @@ class GroupChatZone(_PluginBase):
         self.siteoper = SiteOper()
         self.sitechain = SiteChain()
         
-        # 初始化站点缓存
-        self._site_cache = {}
+        # 初始化缓存
+        self._site_cache = TTLCache(maxsize=1, ttl=self._cache_ttl)
+        self._cache_initialized = False
 
         # 停止现有任务
         self.stop_service()
 
-        # 配置
         if config:
-            # 修正类型转换
             self._enabled = bool(config.get("enabled", False))
             self._cron = str(config.get("cron", ""))
             self._onlyonce = bool(config.get("onlyonce", False))
@@ -129,12 +130,12 @@ class GroupChatZone(_PluginBase):
         :param log_update: 是否记录更新日志
         :return: 包含站点信息和映射的字典
         """
-        # 检查缓存是否过期
-        current_time = time.time()
-        cache_expired = self._site_cache.get("timestamp", 0) + self._cache_expire_time < current_time
-        
-        # 如果缓存为空、需要刷新或缓存已过期，则重新获取站点信息
-        if not self._site_cache or refresh or cache_expired:
+        # 如果需要强制刷新缓存，则清空缓存
+        if refresh and self._site_cache:
+            self._site_cache.clear()
+            self._cache_initialized = False
+            
+        if not self._cache_initialized or not self._site_cache:
             try:
                 # 获取所有站点信息
                 all_sites = [site for site in self.sites.get_indexers() if not site.get("public")] + self.__custom_sites()
@@ -146,31 +147,36 @@ class GroupChatZone(_PluginBase):
                 all_site_ids = list(site_id_to_name.keys())
                 
                 # 更新缓存
-                self._site_cache = {
+                site_info = {
                     "all_sites": all_sites,
                     "site_id_to_name": site_id_to_name,
                     "site_id_to_obj": site_id_to_obj,
                     "site_name_to_obj": site_name_to_obj,
-                    "all_site_ids": all_site_ids,
-                    "timestamp": current_time
+                    "all_site_ids": all_site_ids
                 }
+                
+                # 存入缓存
+                self._site_cache["site_info"] = site_info
+                self._cache_initialized = True
                 
                 if log_update:
                     logger.debug(f"站点信息缓存已更新，共 {len(all_sites)} 个站点")
+                    
+                return site_info
             except Exception as e:
                 logger.error(f"获取站点信息失败: {str(e)}")
-
-                if not self._site_cache:
-                    # 如果没有缓存，创建空缓存结构
-                    self._site_cache = {
-                        "all_sites": [],
-                        "site_id_to_name": {},
-                        "site_id_to_obj": {},
-                        "site_name_to_obj": {},
-                        "all_site_ids": [],
-                        "timestamp": current_time
-                    }
-        return self._site_cache
+                # 如果获取失败，返回空结构
+                empty_info = {
+                    "all_sites": [],
+                    "site_id_to_name": {},
+                    "site_id_to_obj": {},
+                    "site_name_to_obj": {},
+                    "all_site_ids": []
+                }
+                return empty_info
+        
+        # 从缓存中获取站点信息
+        return self._site_cache.get("site_info", {})
 
     def __get_all_site_ids(self, log_update=True) -> List[str]:
         """
@@ -696,7 +702,7 @@ class GroupChatZone(_PluginBase):
             total=3,
             backoff_factor=1,
             status_forcelist=[403, 404, 500, 502, 503, 504],
-            allowed_methods=frozenset(['GET']),
+            allowed_methods=frozenset(['GET', 'POST']),
             raise_on_status=False
         )
 
@@ -709,39 +715,21 @@ class GroupChatZone(_PluginBase):
             session.mount('https://', adapter)
             session.mount('http://', adapter)
             
-            max_attempts = 3  # 默认重试次数
-            if hasattr(retries, 'total') and retries.total is not None:
-                max_attempts = retries.total
-                
-            for attempt in range(max_attempts):
-                try:
-                    # 设置较短的超时时间
-                    response = session.get(
-                        send_url, 
-                        params=params,
-                        timeout=(3.05, 10),
-                        allow_redirects=False
-                    )
-                    response.raise_for_status()
-                    logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
-                    break
-
-                except requests.exceptions.HTTPError as http_err:
-                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，HTTP 错误: {http_err}")
-                except requests.exceptions.RequestException as req_err:
-                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {req_err}")
-                
-                if attempt < max_attempts - 1:
-                    backoff_time = 1.0
-                    if hasattr(retries, 'get_backoff_time'):
-                        try:
-                            backoff_time = retries.get_backoff_time()
-                        except:
-                            pass
-                    logger.info(f"重试 {attempt + 1}/{max_attempts}，将在 {backoff_time} 秒后重试...")
-                    time.sleep(backoff_time)
-                else:
-                    logger.error(f"向 {site_name} 发送消息 '{message}' 失败，重试次数已达上限")
+            try:
+                response = session.get(
+                    send_url, 
+                    params=params,
+                    timeout=(3.05, 10),
+                    allow_redirects=False
+                )
+                response.raise_for_status()
+                logger.info(f"向 {site_name} 发送消息 '{message}' 成功")
+            except requests.exceptions.HTTPError as http_err:
+                logger.error(f"向 {site_name} 发送消息 '{message}' 失败，HTTP 错误: {http_err}")
+                raise
+            except requests.exceptions.RequestException as req_err:
+                logger.error(f"向 {site_name} 发送消息 '{message}' 失败，请求异常: {req_err}")
+                raise
 
     def stop_service(self):
         """退出插件"""
